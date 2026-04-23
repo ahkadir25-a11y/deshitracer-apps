@@ -1,0 +1,13 @@
+"use strict";
+Object.defineProperty(exports, "__esModule", { value: true });
+exports.VisitorCountRoutes = void 0;
+const express_1 = require("express");
+const contactCount_controller_1 = require("../contactCount/contactCount.controller");
+const visitorCount_controller_1 = require("./visitorCount.controller");
+const router = (0, express_1.Router)();
+router.get('/', visitorCount_controller_1.VisitorCountControllers.getAdminAnalytics);
+router.get('/:businessId/contact', contactCount_controller_1.ContactCountControllers.getContactAnalytics);
+router.post('/:businessId', contactCount_controller_1.ContactCountControllers.addContactCount);
+router.get('/:businessId', visitorCount_controller_1.VisitorCountControllers.getBusinessAnalytics);
+router.post('/:businessId/visit', visitorCount_controller_1.VisitorCountControllers.addToVisitorCount);
+exports.VisitorCountRoutes = router;

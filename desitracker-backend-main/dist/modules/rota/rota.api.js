@@ -1,0 +1,15 @@
+"use strict";
+var __importDefault = (this && this.__importDefault) || function (mod) {
+    return (mod && mod.__esModule) ? mod : { "default": mod };
+};
+Object.defineProperty(exports, "__esModule", { value: true });
+exports.RotaRoutes = void 0;
+const express_1 = __importDefault(require("express"));
+const role_api_1 = require("./role/role.api");
+const employee_api_1 = require("./employee/employee.api");
+const shift_api_1 = require("./shift/shift.api");
+const router = express_1.default.Router();
+router.use('/roles', role_api_1.RotaRoleRoutes);
+router.use('/employees', employee_api_1.RotaEmployeeRoutes);
+router.use('/shifts', shift_api_1.RotaShiftRoutes);
+exports.RotaRoutes = router;

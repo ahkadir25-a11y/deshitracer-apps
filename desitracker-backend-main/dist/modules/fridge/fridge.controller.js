@@ -1,0 +1,96 @@
+"use strict";
+var __awaiter = (this && this.__awaiter) || function (thisArg, _arguments, P, generator) {
+    function adopt(value) { return value instanceof P ? value : new P(function (resolve) { resolve(value); }); }
+    return new (P || (P = Promise))(function (resolve, reject) {
+        function fulfilled(value) { try { step(generator.next(value)); } catch (e) { reject(e); } }
+        function rejected(value) { try { step(generator["throw"](value)); } catch (e) { reject(e); } }
+        function step(result) { result.done ? resolve(result.value) : adopt(result.value).then(fulfilled, rejected); }
+        step((generator = generator.apply(thisArg, _arguments || [])).next());
+    });
+};
+var __importDefault = (this && this.__importDefault) || function (mod) {
+    return (mod && mod.__esModule) ? mod : { "default": mod };
+};
+Object.defineProperty(exports, "__esModule", { value: true });
+const fridge_service_1 = __importDefault(require("./fridge.service"));
+const getErrorMessage = (err) => {
+    if (err instanceof Error)
+        return err.message;
+    if (typeof err === 'string')
+        return err;
+    return 'An unexpected error occurred';
+};
+class FridgeController {
+    // Create a new fridge for a user
+    createFridge(req, res) {
+        return __awaiter(this, void 0, void 0, function* () {
+            try {
+                const { userId, fridgeName, fridgeLocation } = req.body;
+                const fridge = yield fridge_service_1.default.createFridge(userId, fridgeName, fridgeLocation);
+                res.status(201).json(fridge);
+            }
+            catch (error) {
+                res.status(400).json({ message: getErrorMessage(error) });
+            }
+        });
+    }
+    // Add a temperature record for a specific fridge
+    addTemperatureRecord(req, res) {
+        return __awaiter(this, void 0, void 0, function* () {
+            try {
+                const { fridgeId, minTemperature, maxTemperature, date } = req.body; // include date
+                const updatedFridge = yield fridge_service_1.default.addTemperatureRecord(fridgeId, minTemperature, maxTemperature, date);
+                res.status(200).json(updatedFridge);
+            }
+            catch (error) {
+                res.status(400).json({ message: getErrorMessage(error) });
+            }
+        });
+    }
+    // Edit a temperature record
+    editTemperatureRecord(req, res) {
+        return __awaiter(this, void 0, void 0, function* () {
+            try {
+                const { fridgeId, recordId, minTemperature, maxTemperature } = req.body;
+                const updatedFridge = yield fridge_service_1.default.editTemperatureRecord(fridgeId, recordId, minTemperature, maxTemperature);
+                res.status(200).json(updatedFridge);
+            }
+            catch (error) {
+                res.status(400).json({ message: getErrorMessage(error) });
+            }
+        });
+    }
+    // Get all fridges for a specific user
+    getFridges(req, res) {
+        return __awaiter(this, void 0, void 0, function* () {
+            try {
+                const { userId } = req.params;
+                const fridges = yield fridge_service_1.default.getFridgesByUser(userId);
+                // if service returns [] or null/undefined, handle both
+                if (!fridges || (Array.isArray(fridges) && fridges.length === 0)) {
+                    res.status(404).json({ message: 'No fridges found for this user' });
+                    return;
+                }
+                res.status(200).json(fridges);
+            }
+            catch (error) {
+                res.status(400).json({ message: getErrorMessage(error) });
+            }
+        });
+    }
+    // Get temperature records for a specific fridge
+    getTemperatureRecords(req, res) {
+        return __awaiter(this, void 0, void 0, function* () {
+            try {
+                const { fridgeId } = req.params;
+                const { date, startDate, endDate } = req.query;
+                const records = yield fridge_service_1.default.getTemperatureRecordsByFridge(fridgeId, date, startDate, endDate);
+                res.status(200).json(records);
+            }
+            catch (error) {
+                res.status(400).json({ message: getErrorMessage(error) });
+            }
+        });
+    }
+}
+exports.default = new FridgeController();

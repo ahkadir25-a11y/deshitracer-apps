@@ -1,0 +1,62 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Review Submission Confirmation</title>
+    <style>
+      body {
+        font-family: Arial, sans-serif;
+        background-color: #f4f4f9;
+        color: #333;
+        margin: 0;
+        padding: 0;
+      }
+      .container {
+        width: 100%;
+        max-width: 600px;
+        margin: 20px auto;
+        background-color: #fff;
+        padding: 30px;
+        border-radius: 8px;
+        box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);
+      }
+      h1 {
+        font-size: 24px;
+        margin-bottom: 10px;
+      }
+      p {
+        font-size: 16px;
+        line-height: 1.5;
+        margin: 10px 0;
+      }
+      .footer {
+        margin-top: 20px;
+        font-size: 14px;
+        color: #777;
+      }
+      .footer a {
+        color: #2c18c6;
+        text-decoration: none;
+      }
+      .button {
+        background-color: #2c18c6;
+        color: white;
+        padding: 10px 20px;
+        border-radius: 5px;
+        text-decoration: none;
+      }
+    </style>
+  </head>
+  <body>
+    <div class="container">
+      <h1>Thank you for submitting your review!</h1>
+      <p>Dear {{name}},</p>
+      <p>Thank you for sharing your thoughts with us. We have received your review for the business <strong>{{businessName}}</strong>.</p>
+      <p>Your feedback is valuable to us, and we appreciate you taking the time to write a review.</p>
+      <p>If you need any further assistance or have any questions, feel free to reach out to us.</p>
+      <p class="footer">Best regards, <br/> The Review Team</p>
+      <a href="mailto:support@yourdomain.com" class="button">Contact Support</a>
+    </div>
+  </body>
+</html>

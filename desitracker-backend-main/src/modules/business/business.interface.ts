@@ -1,0 +1,116 @@
+import { Schema, Types } from 'mongoose';
+
+export type TContactDetails = {
+  phoneNumber: string;
+  email: string;
+  websiteUrl: string;
+  facebook: string;
+  instagram: string;
+  linkedin: string;
+  twitter: string;
+};
+
+export type TBranch = {
+  branchName?: string;
+  address: string;
+  postCode: string;
+  city: string;
+  state: string;
+  country: string;
+};
+
+export type TLocation = {
+  address: string;
+  exactBusinessLocation: string;
+  division?: string;
+  district?: string;
+  homeTown?: string;
+  thana?: string;
+  postCode?: string;
+  city?: string;
+  state: string;
+  country: string;
+  isMultipleLocation: boolean;
+  branches?: TBranch[];
+  lat?: string;
+  long?: string;
+};
+
+export type TOperationDetails = {
+  businessHours: {
+    start: Date;
+    end: Date;
+  };
+  provideHomeDelivery?: boolean;
+  provideOnlineService?: boolean;
+  offerInStorePickup?: boolean;
+  isParkingAvailable?: boolean;
+  offerOnlineBooking?: boolean;
+  onlineBookingLink?: string;
+  whatsappNumber?: string
+  menuLink?: string
+};
+
+type TPaymentMethod = 'Cash' | 'Card' | 'PayPal' | 'Apple Pay';
+
+type TFoodOptions = 'Halal' | 'Kosher' | 'Vegan';
+
+export type TFeatures = {
+  officialLanguage: string;
+  secondLanguage?: string;
+  acceptedPaymentMethod: TPaymentMethod;
+  offerSpecialDiscount: boolean;
+  isWheelChairAccessible: boolean;
+  foodOptions: TFoodOptions;
+};
+
+export type TMediaUnit = {
+  url: string;
+  description: string;
+};
+
+export type TMedia = {
+  thumbnail?: TMediaUnit[];
+  images: TMediaUnit[];
+  videos: TMediaUnit[];
+};
+export interface TOpeningHour {
+  day: string; // e.g., "Monday"
+  start: string; // e.g., "09:00"
+  end: string;   // e.g., "17:00"
+}
+
+export const OpeningHourSchema = new Schema<TOpeningHour>({
+  day: { type: String, required: true },
+  start: { type: String },
+  end: { type: String },
+});
+
+export type TBusiness = {
+  businessName: string;
+  checkoutNumber: string;
+  slug: string;
+  owner: Types.ObjectId;
+  category: Types.ObjectId;
+  subCategory?: Types.ObjectId;
+  selectedType?: string; // Added selectedType field
+  description: string;
+  established?: Date;
+  about?: string;
+  logo: string;
+  contactDetails: TContactDetails;
+  locations: TLocation;
+  operationDetails: TOperationDetails;
+  features: TFeatures;
+  media: TMedia;
+  howToHearAboutDesiTracker: string;
+  agreeToTermsConditions: boolean;
+  hasCustomerTestimonials: boolean;
+  isDeleted: boolean;
+  isActive: boolean;
+  isHalal: boolean;
+  isTrash: boolean;
+  openingHours: TOpeningHour[];
+  googleMapLink: string;
+  paymentMethods: string[];
+};
