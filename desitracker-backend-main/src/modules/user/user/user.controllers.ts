@@ -20,7 +20,7 @@ const registerUser = handleAsyncRequest(async (req: Request, res: Response) => {
 // Get User Detail
 const getUserDetails = handleAsyncRequest(
   async (req: Request, res: Response) => {
-    const result = await UserServices.getUserDetails(req.params?.id);
+    const result = await UserServices.getUserDetails((req.params?.id as string));
 
     sendResponse(res, {
       success: true,
@@ -44,7 +44,14 @@ const getMe = handleAsyncRequest(async (req: Request, res: Response) => {
 
 // Update User
 const updateUser = handleAsyncRequest(async (req: Request, res: Response) => {
-  const userId = req.params.id;
+  const userId = (req.params.id as string);
+
+  // Authorization: a user can only update their own record. Admins may
+  // update anyone (still no password/role through this route — stripped
+  // in the service).
+  if (req.user?.role !== 'admin' && String(req.user?.id) !== String(userId)) {
+    throw new AppError(403, 'You can only update your own account.');
+  }
 
   // 💡 Safe parse if needed
   let payload = req.body;
@@ -90,7 +97,7 @@ const updatePassword = handleAsyncRequest(
 
 // Delete User
 const deleteUser = handleAsyncRequest(async (req: Request, res: Response) => {
-  const result = await UserServices.deleteUser(req.params.id);
+  const result = await UserServices.deleteUser((req.params.id as string));
 
   sendResponse(res, {
     success: true,
@@ -100,9 +107,24 @@ const deleteUser = handleAsyncRequest(async (req: Request, res: Response) => {
   });
 });
 
+// Delete own account (self-service). Owners/members can; staff cannot.
+const deleteMe = handleAsyncRequest(async (req: Request, res: Response) => {
+  const result = await UserServices.deleteOwnAccount(
+    req.user?.id,
+    req.user?.role,
+  );
+
+  sendResponse(res, {
+    success: true,
+    statusCode: 200,
+    message: 'Your account has been deleted successfully.',
+    data: result,
+  });
+});
+
 // Get Users
 const getUsers = handleAsyncRequest(async (req: Request, res: Response) => {
-  const result = await UserServices.getUsers(req.query);
+  const result = await UserServices.getUsers(req.query as any);
 
   sendResponse(res, {
     success: true,
@@ -113,12 +135,24 @@ const getUsers = handleAsyncRequest(async (req: Request, res: Response) => {
   });
 });
 
+const savePushToken = handleAsyncRequest(async (req: Request, res: Response) => {
+  const user = (req as any).user;
+  if (!user?.id) throw new AppError(401, 'Not authenticated');
+  const { token } = req.body;
+  if (!token || typeof token !== 'string') throw new AppError(400, 'token is required');
+  const { User } = await import('./user.model');
+  await User.findByIdAndUpdate(user.id, { expoPushToken: token });
+  sendResponse(res, { success: true, statusCode: 200, message: 'Push token saved', data: null });
+});
+
 export const UserControllers = {
   registerUser,
   getUserDetails,
   updateUser,
   updatePassword,
   deleteUser,
+  deleteMe,
   getUsers,
   getMe,
+  savePushToken,
 };

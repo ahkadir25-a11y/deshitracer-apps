@@ -88,9 +88,29 @@ export const deleteMeController: RequestHandler = async (req, res): Promise<void
   res.json({ message: 'Account deleted and all data removed.' });
 };
 
+export const savePushTokenController: RequestHandler = async (req, res): Promise<void> => {
+  const token = req.body?.token;
+  if (!token || typeof token !== 'string') {
+    res.status(400).json({ message: 'Field "token" is required' });
+    return;
+  }
+  await memberService.saveMemberPushToken((req as MemberAuthRequest).member!.id, token);
+  res.json({ ok: true });
+};
+
+export const getScanHistoryController = handleAsyncRequest(async (req: Request, res: Response): Promise<void> => {
+  const memberId = (req as MemberAuthRequest).member!.id;
+  const page = Number(req.query.page) || 1;
+  const limit = Number(req.query.limit) || 20;
+  const data = await memberService.getScanHistory(memberId, page, limit);
+  res.json(data);
+});
+
 // ---------- Wrapped controllers must be Promise<void> and never return Response ----------
 export const verifyBySlugController = handleAsyncRequest(async (req: Request, res: Response): Promise<void> => {
-  const data = await memberService.verifyBySlug(req.params.slug);
+  const businessId = typeof req.query.businessId === 'string' ? req.query.businessId : undefined;
+  const businessName = typeof req.query.businessName === 'string' ? req.query.businessName : undefined;
+  const data = await memberService.verifyBySlug(req.params.slug as string, businessId, businessName);
   res.json(data);
 });
 
@@ -186,7 +206,7 @@ export const listDeactivationRequestsController = handleAsyncRequest(async (req:
 });
 
 export const acceptDeactivationRequestController = handleAsyncRequest(async (req: Request, res: Response): Promise<void> => {
-  const id = req.params.id;
+  const id = (req.params.id as string);
   const processedBy = (req.headers['x-api-key'] as string) || undefined;
   const processedNote = typeof req.body?.note === 'string' ? req.body.note : undefined;
 
@@ -198,9 +218,13 @@ export const acceptDeactivationRequestController = handleAsyncRequest(async (req
 
 export const addLeadController = handleAsyncRequest(async (req: Request, res: Response): Promise<void> => {
 
-  const { memberId, ownerId } = (req.body || {}) as { memberId?: string, ownerId?: string };
+  // Owner identity comes from the authenticated token — NEVER the request body.
+  // Previously `ownerId` was attacker-controlled, so any business user could
+  // add/read/modify another owner's leads (cross-tenant IDOR).
+  const ownerId = (req as any).user?.id as string | undefined;
+  const { memberId } = (req.body || {}) as { memberId?: string };
+  if (!ownerId) { res.status(401).json({ message: 'Not authenticated' }); return; }
   if (!memberId) { res.status(400).json({ message: 'Field "memberId" is required' }); return; }
-  if (!ownerId) { res.status(400).json({ message: 'Field "ownerId" is required' }); return; }
 
   try {
     const data = await memberService.addLead(ownerId, memberId);
@@ -214,8 +238,8 @@ export const addLeadController = handleAsyncRequest(async (req: Request, res: Re
 });
 
 export const removeLeadController = handleAsyncRequest(async (req: Request, res: Response): Promise<void> => {
-  const ownerId = req.query.ownerId?.toString();
-  if (!ownerId) { res.status(400).json({ message: 'Field "ownerId" is required' }); return; }
+  const ownerId = (req as any).user?.id as string | undefined;
+  if (!ownerId) { res.status(401).json({ message: 'Not authenticated' }); return; }
 
   const leadMemberId = req.params.memberId;
   if (!leadMemberId) { res.status(400).json({ message: 'Param "memberId" is required' }); return; }
@@ -231,8 +255,8 @@ export const removeLeadController = handleAsyncRequest(async (req: Request, res:
 });
 
 export const listMyLeadsController = handleAsyncRequest(async (req: Request, res: Response): Promise<void> => {
-  const ownerId = req.query.ownerId?.toString();
-  if (!ownerId) { res.status(400).json({ message: 'Field "ownerId" is required' }); return; }
+  const ownerId = (req as any).user?.id as string | undefined;
+  if (!ownerId) { res.status(401).json({ message: 'Not authenticated' }); return; }
 
   const q = typeof req.query.q === 'string' ? req.query.q : undefined;
   const page = Number.parseInt(String(req.query.page ?? '1'), 10) || 1;
@@ -247,12 +271,19 @@ export const listMyLeadsController = handleAsyncRequest(async (req: Request, res
 export const sendPromotionToLeadsController = handleAsyncRequest(
   async (req: Request, res: Response): Promise<void> => {
 
-    const { offerId, subject, message, ownerId } = (req.body || {}) as {
+    const { offerId, subject, message } = (req.body || {}) as {
       offerId?: string;
       subject?: string;
       message?: string;
-      ownerId?: string;
     };
+
+    // Sender identity from the token only — stops one owner blasting promos to
+    // another owner's leads by passing an arbitrary ownerId.
+    const ownerId = (req as any).user?.id as string | undefined;
+    if (!ownerId) {
+      res.status(401).json({ message: 'Not authenticated' });
+      return;
+    }
 
     if (!offerId) {
       res.status(400).json({ message: 'Field "offerId" is required' });

@@ -26,14 +26,17 @@ const business_model_1 = require("../business/business.model");
 const categoryModel_1 = __importDefault(require("./categoryModel"));
 const dayOffer_model_1 = __importDefault(require("./dayOffer.model"));
 const product_model_1 = __importDefault(require("./product.model"));
+const member_model_1 = require("../members/member.model");
+const push_1 = require("../../utils/lib/push");
 // Add a new product
-const addProduct = (_a) => __awaiter(void 0, [_a], void 0, function* ({ name, price, description, images, thumbnail, user_id, business_id, currency, product_category_id, discount_percent = 0, discount_start = null, discount_end = null, 
+const addProduct = (_a) => __awaiter(void 0, [_a], void 0, function* ({ name, price, description, tags = [], images, thumbnail, user_id, business_id, currency, product_category_id, discount_percent = 0, discount_start = null, discount_end = null, 
 // ✅ ADD THIS
 product_options_ids = [], }) {
     const newProduct = new product_model_1.default({
         name,
         price,
         description,
+        tags,
         images,
         thumbnail,
         user_id,
@@ -153,7 +156,33 @@ function createDayOffer(data) {
         if (total >= 7)
             throw new Error('You already have 7 day offers for this business.');
         const doc = new dayOffer_model_1.default(data);
-        return doc.save();
+        const saved = yield doc.save();
+        // notify all active members with a push token (fire-and-forget)
+        notifyMembersNewOffer(data.business_id, data.discount_percent, data.day).catch(() => { });
+        return saved;
+    });
+}
+function notifyMembersNewOffer(businessId, discountPercent, day) {
+    return __awaiter(this, void 0, void 0, function* () {
+        const business = yield business_model_1.Business.findById(businessId).select('businessName').lean();
+        const name = (business === null || business === void 0 ? void 0 : business.businessName) || 'A business';
+        const members = yield member_model_1.Member.find({ active: true, expoPushToken: { $ne: null }, deletedAt: null })
+            .select('expoPushToken')
+            .lean();
+        const tokens = members.map((m) => m.expoPushToken).filter(Boolean);
+        if (!tokens.length)
+            return;
+        // send in batches of 100 (Expo limit)
+        for (let i = 0; i < tokens.length; i += 100) {
+            const batch = tokens.slice(i, i + 100).map((to) => ({
+                to,
+                title: '🎉 New Member Offer!',
+                body: `${name} is offering ${discountPercent}% off every ${day}. Show your member card!`,
+                data: { type: 'NEW_OFFER', businessId },
+                channelId: 'member-offers',
+            }));
+            yield (0, push_1.sendExpoPush)(batch);
+        }
     });
 }
 function listDayOffers(filters) {

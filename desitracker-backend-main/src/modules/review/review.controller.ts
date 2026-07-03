@@ -20,7 +20,7 @@ const getAllBusinessReviews = handleAsyncRequest(
     const { businessId } = req?.params;
     const result = await ReviewServices.getAllBusinessReviews(
       businessId,
-      req.query,
+      req.query as any,
     );
 
     const { reviews, meta } = result;
@@ -36,7 +36,7 @@ const getAllBusinessReviews = handleAsyncRequest(
 
 const getAllReviews = handleAsyncRequest(
   async (req: Request, res: Response) => {
-    const result = await ReviewServices.getAllReviews(req.query);
+    const result = await ReviewServices.getAllReviews(req.query as any);
 
     const { reviews, meta } = result;
 
@@ -66,7 +66,7 @@ const getSingleReview = handleAsyncRequest(
 const updateReviewVisibility = handleAsyncRequest(
   async (req: Request, res: Response) => {
     const result = await ReviewServices.updateReviewVisibility(
-      req.params?.reviewId,
+      (req.params?.reviewId as string),
       req.body?.show,
     );
     sendResponse<TReview>(res, {
@@ -81,7 +81,7 @@ const updateReviewVisibility = handleAsyncRequest(
 const updateReviewByReviewer = handleAsyncRequest(
   async (req: Request, res: Response) => {
     const result = await ReviewServices.updateReviewByReviewer(
-      req.params?.reviewId,
+      (req.params?.reviewId as string),
       req.body,
     );
     sendResponse<TReview>(res, {

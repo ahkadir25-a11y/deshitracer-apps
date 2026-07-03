@@ -54,6 +54,9 @@ const userSchema = new mongoose_1.default.Schema({
         type: String,
         required: [true, 'Please enter your phone number'],
         validate: [validator_1.default.isMobilePhone, 'Please enter a valid phone number'],
+        // Indexed because login can look users up by phone. Not `unique` yet —
+        // existing data may contain duplicates; dedupe before adding uniqueness.
+        index: true,
     },
     fbProfile: {
         type: String,
@@ -63,11 +66,15 @@ const userSchema = new mongoose_1.default.Schema({
         type: String,
         trim: true,
     },
+    coverPhotoUrl: {
+        type: String,
+        trim: true,
+    },
     role: {
         type: String,
         enum: {
-            values: ['user', 'admin', 'business_owner'],
-            message: '{VALUE} is not a valid role. Allowed roles are: user, admin, business_owner.',
+            values: ['user', 'admin', 'business_owner', 'staff'],
+            message: '{VALUE} is not a valid role. Allowed roles are: user, admin, business_owner, staff.',
         },
         default: 'business_owner',
     },
@@ -76,6 +83,11 @@ const userSchema = new mongoose_1.default.Schema({
     },
     isBlocked: { type: Boolean, default: false },
     isDeleted: { type: Boolean, default: false },
+    expoPushToken: { type: String, default: null },
+    // 6-digit numeric code for in-app password reset (no web link). Cleared
+    // once used or expired. `select: false` so it never leaks in normal reads.
+    passwordResetCode: { type: String, select: false, default: null },
+    passwordResetCodeExpires: { type: Date, select: false, default: null },
 }, {
     timestamps: true,
     toJSON: {
@@ -88,10 +100,11 @@ const userSchema = new mongoose_1.default.Schema({
 // Hash password before save
 userSchema.pre('validate', function (next) {
     return __awaiter(this, void 0, void 0, function* () {
-        if (!this.isModified('password')) {
+        const user = this;
+        if (!user.isModified('password')) {
             return next();
         }
-        this.password = yield (0, bcryptHelper_1.hashPassword)(this.password);
+        user.password = yield (0, bcryptHelper_1.hashPassword)(user.password);
         next();
     });
 });

@@ -11,6 +11,7 @@ export type CreateShiftDTO = {
   location?: string;
   notes?: string;
   status?: 'DRAFT' | 'PUBLISHED' | 'CANCELLED';
+  ownerMandatedOvertime?: boolean;
 };
 
 export type UpdateShiftDTO = Partial<Omit<CreateShiftDTO, 'business'>>;
@@ -68,6 +69,10 @@ export const RotaShiftValidation = {
         throw new AppError(400, 'status must be DRAFT, PUBLISHED or CANCELLED');
       }
       dto.status = payload.status;
+    }
+
+    if (payload?.ownerMandatedOvertime !== undefined) {
+      dto.ownerMandatedOvertime = RotaUtils.parseBoolean(payload.ownerMandatedOvertime);
     }
 
     return dto;

@@ -76,6 +76,8 @@ const createReview = (payload) => __awaiter(void 0, void 0, void 0, function* ()
         email: payload.email,
         subject: `Review Submitted Successfully For ${business.businessName}`,
         message: htmlTemplate,
+    }).catch(e => {
+        console.error(`Failed to send review email to ${payload.email}:`, e);
     });
     return review;
 });

@@ -20,11 +20,12 @@ const handleAsyncRequest_1 = __importDefault(require("../utils/handleAsyncReques
 const jwt_1 = require("../utils/jwt");
 const auth = (...requiredRoles) => {
     return (0, handleAsyncRequest_1.default)((req, res, next) => __awaiter(void 0, void 0, void 0, function* () {
-        const token = req.headers.authorization;
+        const authHeader = req.headers.authorization;
         // check if client has token
-        if (!token) {
+        if (!authHeader || !authHeader.startsWith('Bearer ')) {
             throw new AppError_1.default(http_status_1.default.UNAUTHORIZED, 'You are not authorized. please login.');
         }
+        const token = authHeader.slice(7);
         // check if the token is valid
         const decodedUser = jwt_1.JwtHelpers.verifyToken(token, config_1.default.jwt.accessSecret);
         // console.log(decodedUser);

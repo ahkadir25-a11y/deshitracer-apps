@@ -27,7 +27,7 @@ const getAllSliders = handleAsyncRequest(
 
 const getSingleSlider = handleAsyncRequest(
   async (req: Request, res: Response) => {
-    const result = await SliderServices.getSingleSlider(req.params.id);
+    const result = await SliderServices.getSingleSlider((req.params.id as string));
     // console.log({ result });
     sendResponse(res, {
       success: true,
@@ -39,7 +39,7 @@ const getSingleSlider = handleAsyncRequest(
 );
 
 const deleteSlider = handleAsyncRequest(async (req: Request, res: Response) => {
-  await SliderServices.deleteSlider(req.params.id);
+  await SliderServices.deleteSlider((req.params.id as string));
   sendResponse(res, {
     success: true,
     statusCode: 200,

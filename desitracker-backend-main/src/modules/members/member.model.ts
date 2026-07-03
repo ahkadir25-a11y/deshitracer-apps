@@ -13,6 +13,7 @@ export interface IMember extends Document {
   qrSlug: string;
   qrCodeUrl?: string;
   active: boolean;
+  expoPushToken?: string | null;
   deletedAt?: Date | null;
   comparePassword(candidate: string): Promise<boolean>;
 }
@@ -31,6 +32,7 @@ const MemberSchema = new Schema<IMember>(
     qrCodeUrl: { type: String },
 
     active: { type: Boolean, default: true },
+    expoPushToken: { type: String, default: null },
     deletedAt: { type: Date, default: null },
   },
   { timestamps: true }

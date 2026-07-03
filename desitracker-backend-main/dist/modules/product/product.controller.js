@@ -84,7 +84,7 @@ function validateDiscountWindow(startRaw, endRaw, res) {
 const addProduct = (req, res) => __awaiter(void 0, void 0, void 0, function* () {
     var _a, _b;
     try {
-        const { name, product_category_id, price, description, images, thumbnail, user_id, business_id, currency, discount_percent, discount_start, discount_end, 
+        const { name, product_category_id, price, description, tags, images, thumbnail, user_id, business_id, currency, discount_percent, discount_start, discount_end, 
         // ✅ ADD THIS
         product_options_ids, } = req.body;
         if (!validateDiscount(discount_percent, res))
@@ -96,6 +96,7 @@ const addProduct = (req, res) => __awaiter(void 0, void 0, void 0, function* () 
             name,
             price,
             description,
+            tags: Array.isArray(tags) ? tags : [],
             images,
             thumbnail,
             user_id,

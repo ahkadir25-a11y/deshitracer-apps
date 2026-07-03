@@ -47,23 +47,8 @@ const addToVisitorCount = handleAsyncRequest(
   },
 );
 
-const getMemberVisitHistory = handleAsyncRequest(
-  async (req: Request, res: Response) => {
-    const memberId = (req as any).member?.id;
-    const result = await VisitorCountServices.getMemberVisitHistory(memberId);
-
-    sendResponse<any>(res, {
-      success: true,
-      statusCode: 200,
-      message: 'Member visit history retrieved successfully!',
-      data: result,
-    });
-  },
-);
-
 export const VisitorCountControllers = {
   getBusinessAnalytics,
   getAdminAnalytics,
-  addToVisitorCount,
-  getMemberVisitHistory,
+  addToVisitorCount
 };

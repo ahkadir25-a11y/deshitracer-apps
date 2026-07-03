@@ -1,4 +1,7 @@
 "use strict";
+var __importDefault = (this && this.__importDefault) || function (mod) {
+    return (mod && mod.__esModule) ? mod : { "default": mod };
+};
 Object.defineProperty(exports, "__esModule", { value: true });
 const express_1 = require("express");
 const visitorCount_api_1 = require("../modules/analytics/businessVisitorCount/visitorCount.api");
@@ -17,9 +20,17 @@ const contactController_1 = require("../modules/contactus/contactController");
 const member_api_1 = require("../modules/members/member.api");
 const product_api_1 = require("../modules/product/product.api");
 const fridge_api_1 = require("../modules/fridge/fridge.api"); // Import fridge routes
+const cleaning_api_1 = require("../modules/cleaning/cleaning.api"); // Import cleaning routes
 const rota_api_1 = require("../modules/rota/rota.api");
 const productOption_api_1 = require("../modules/product/productOption.api");
 const order_api_1 = require("../modules/order/order.api");
+const inventory_api_1 = require("../modules/inventory/inventory.api");
+const eodReport_api_1 = require("../modules/eod/eodReport.api");
+const dinein_api_1 = require("../modules/dinein/dinein.api");
+const activity_api_1 = require("../modules/activity/activity.api");
+const table_route_1 = require("../modules/table/table.route");
+const booking_api_1 = __importDefault(require("../modules/booking/booking.api"));
+const notification_api_1 = require("../modules/notification/notification.api");
 const router = (0, express_1.Router)();
 const moduleRoutes = [
     {
@@ -88,12 +99,44 @@ const moduleRoutes = [
         route: fridge_api_1.FridgeRoutes, // Link the fridge routes here
     },
     {
+        path: '/cleaning', // Cleaning checklist module
+        route: cleaning_api_1.CleaningRoutes,
+    },
+    {
         path: '/rota', // Add the fridge module route
         route: rota_api_1.RotaRoutes, // Link the fridge routes here
     },
     {
         path: '/orders',
         route: order_api_1.OrderRoutes,
+    },
+    {
+        path: '/inventory',
+        route: inventory_api_1.InventoryRoutes,
+    },
+    {
+        path: '/eod',
+        route: eodReport_api_1.EODRoutes,
+    },
+    {
+        path: '/dinein',
+        route: dinein_api_1.DineInRoutes,
+    },
+    {
+        path: '/activity',
+        route: activity_api_1.ActivityRoutes,
+    },
+    {
+        path: '/tables',
+        route: table_route_1.TableRoutes,
+    },
+    {
+        path: '/booking',
+        route: booking_api_1.default,
+    },
+    {
+        path: '/notifications',
+        route: notification_api_1.NotificationRoutes,
     },
 ];
 moduleRoutes.forEach((routeObj) => router.use(routeObj.path, routeObj.route));

@@ -15,9 +15,17 @@ import { sendContactMessage } from '../modules/contactus/contactController';
 import { MemberRoutes } from '../modules/members/member.api';
 import { ProductsRoutes } from '../modules/product/product.api';
 import { FridgeRoutes } from '../modules/fridge/fridge.api'; // Import fridge routes
+import { CleaningRoutes } from '../modules/cleaning/cleaning.api'; // Import cleaning routes
 import { RotaRoutes } from '../modules/rota/rota.api';
 import { ProductOptionRoutes } from '../modules/product/productOption.api';
 import { OrderRoutes } from '../modules/order/order.api';
+import { InventoryRoutes } from '../modules/inventory/inventory.api';
+import { EODRoutes } from '../modules/eod/eodReport.api';
+import { DineInRoutes } from '../modules/dinein/dinein.api';
+import { ActivityRoutes } from '../modules/activity/activity.api';
+import { TableRoutes } from '../modules/table/table.route';
+import BookingRoutes from '../modules/booking/booking.api';
+import { NotificationRoutes } from '../modules/notification/notification.api';
 
 const router = Router();
 
@@ -88,6 +96,10 @@ const moduleRoutes = [
     route: FridgeRoutes,  // Link the fridge routes here
   },
   {
+    path: '/cleaning',  // Cleaning checklist module
+    route: CleaningRoutes,
+  },
+  {
     path: '/rota',  // Add the fridge module route
     route: RotaRoutes,  // Link the fridge routes here
   },
@@ -95,7 +107,34 @@ const moduleRoutes = [
     path: '/orders',
     route: OrderRoutes,
   },
-
+  {
+    path: '/inventory',
+    route: InventoryRoutes,
+  },
+  {
+    path: '/eod',
+    route: EODRoutes,
+  },
+  {
+    path: '/dinein',
+    route: DineInRoutes,
+  },
+  {
+    path: '/activity',
+    route: ActivityRoutes,
+  },
+  {
+    path: '/tables',
+    route: TableRoutes,
+  },
+  {
+    path: '/booking',
+    route: BookingRoutes,
+  },
+  {
+    path: '/notifications',
+    route: NotificationRoutes,
+  },
 ];
 
 moduleRoutes.forEach((routeObj) => router.use(routeObj.path, routeObj.route));

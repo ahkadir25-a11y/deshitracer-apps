@@ -20,7 +20,7 @@ const registerBusiness = handleAsyncRequest(
 
 const updateBusiness = handleAsyncRequest(
   async (req: Request, res: Response) => {
-    const slug = req.params?.slug;
+    const slug = (req.params?.slug as string);
     const result = await BusinessServices.updateBusiness(
       slug,
       req?.body,
@@ -53,7 +53,7 @@ const getAllBusiness = handleAsyncRequest(
 
 const getSingleBusiness = handleAsyncRequest(
   async (req: Request, res: Response) => {
-    const slug = req.params?.slug;
+    const slug = (req.params?.slug as string);
     const result = await BusinessServices.getSingleBusiness(slug, req);
 
     sendResponse<TBusiness>(res, {
@@ -67,7 +67,7 @@ const getSingleBusiness = handleAsyncRequest(
 
 const deleteBusiness = handleAsyncRequest(
   async (req: Request, res: Response) => {
-    const slug = req.params.slug;
+    const slug = (req.params.slug as string);
     const result = await BusinessServices.deleteBusiness(slug, req?.user);
 
     sendResponse<TBusiness>(res, {
@@ -93,11 +93,35 @@ const getAllBusinessListings = handleAsyncRequest(
   },
 );
 
+const setManagerPin = handleAsyncRequest(async (req: Request, res: Response) => {
+  const { businessId, pin } = req.body || {};
+  const result = await BusinessServices.setManagerPin(businessId, pin);
+  sendResponse(res, {
+    statusCode: httpStatus.OK,
+    success: true,
+    message: 'Manager PIN saved',
+    data: result,
+  });
+});
+
+const verifyManagerPin = handleAsyncRequest(async (req: Request, res: Response) => {
+  const { businessId, pin } = req.body || {};
+  const result = await BusinessServices.verifyManagerPin(businessId, pin);
+  sendResponse(res, {
+    statusCode: httpStatus.OK,
+    success: true,
+    message: 'PIN verified',
+    data: result,
+  });
+});
+
 export const BusinessControllers = {
   registerBusiness,
   updateBusiness,
   getAllBusiness,
   getSingleBusiness,
   deleteBusiness,
-  getAllBusinessListings
+  getAllBusinessListings,
+  setManagerPin,
+  verifyManagerPin,
 };

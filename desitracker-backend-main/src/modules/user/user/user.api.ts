@@ -19,23 +19,59 @@ router.post(
   UserControllers.registerUser,
 );
 
-router.get('/me', auth(USER_ROLE.USER, USER_ROLE.ADMIN, USER_ROLE.BUSINESS_OWNER), UserControllers.getMe);
+router.get(
+  '/me',
+  auth(USER_ROLE.USER, USER_ROLE.ADMIN, USER_ROLE.BUSINESS_OWNER, USER_ROLE.STAFF),
+  UserControllers.getMe,
+);
 
-router.get('/', UserControllers.getUsers);
+// Admin-only: full user listing exposes emails/phones (PII) — must never be public.
+router.get('/', auth(USER_ROLE.ADMIN), UserControllers.getUsers);
 
-router.get('/:id', UserControllers.getUserDetails);
+// Any signed-in user may fetch a user by id (website business form needs it),
+// but anonymous access is blocked — the payload contains email/phone (PII).
+router.get(
+  '/:id',
+  auth(USER_ROLE.USER, USER_ROLE.ADMIN, USER_ROLE.BUSINESS_OWNER, USER_ROLE.STAFF),
+  UserControllers.getUserDetails,
+);
 
 router.put(
   '/:id',
-  auth(USER_ROLE.USER, USER_ROLE.ADMIN, USER_ROLE.BUSINESS_OWNER),
+  auth(USER_ROLE.USER, USER_ROLE.ADMIN, USER_ROLE.BUSINESS_OWNER, USER_ROLE.STAFF),
   UserControllers.updateUser,
 );
 
+
+// Self-service account deletion — must be declared BEFORE '/:id' so that
+// 'me' is not captured as a user id. Owners & members can delete their own
+// account; staff are blocked in the service (employer-managed).
+router.delete(
+  '/me',
+  auth(USER_ROLE.USER, USER_ROLE.ADMIN, USER_ROLE.BUSINESS_OWNER, USER_ROLE.STAFF),
+  UserControllers.deleteMe,
+);
 
 router.delete(
   '/:id',
   auth(USER_ROLE.ADMIN),
   UserControllers.deleteUser,
+);
+
+// Owner/staff saves their Expo push token.
+router.put(
+  '/me/push-token',
+  auth(USER_ROLE.USER, USER_ROLE.ADMIN, USER_ROLE.BUSINESS_OWNER, USER_ROLE.STAFF),
+  UserControllers.savePushToken,
+);
+
+// Secure self-service password change — requires the CURRENT password
+// (oldPassword) so a stolen unlocked device can't silently change it. This is
+// the App Store / Play Store compliant flow, separate from forgot-password.
+router.put(
+  '/me/change-password',
+  auth(USER_ROLE.USER, USER_ROLE.ADMIN, USER_ROLE.BUSINESS_OWNER, USER_ROLE.STAFF),
+  UserControllers.updatePassword,
 );
 
 export const UserRoutes = router;

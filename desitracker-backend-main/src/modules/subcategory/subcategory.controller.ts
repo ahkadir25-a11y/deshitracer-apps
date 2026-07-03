@@ -38,7 +38,7 @@ const getAllSubcategories = handleAsyncRequest(
 const getSingleSubcategory = handleAsyncRequest(
   async (req: Request, res: Response) => {
     const result = await SubCategoryServices.getSingleSubcategory(
-      req.params?.slug,
+      (req.params?.slug as string),
     );
 
     sendResponse(res, {
@@ -54,7 +54,7 @@ const getSingleSubcategory = handleAsyncRequest(
 const updateSubcategory = handleAsyncRequest(
   async (req: Request, res: Response) => {
     const result = await SubCategoryServices.updateSubcategory(
-      req.params?.slug,
+      (req.params?.slug as string),
       req.body,
     );
 
@@ -71,7 +71,7 @@ const updateSubcategory = handleAsyncRequest(
 const deleteSubcategory = handleAsyncRequest(
   async (req: Request, res: Response) => {
     const result = await SubCategoryServices.deleteSubcategory(
-      req.params?.slug,
+      (req.params?.slug as string),
     );
 
     sendResponse(res, {

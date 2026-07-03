@@ -28,6 +28,9 @@ const ReviewSchema: Schema = new Schema<TReview>(
   },
   { timestamps: true },
 );
+// Reviews are listed per-business (and the dashboard reads visible ones newest
+// first) — index so these queries don't scan the whole collection.
+ReviewSchema.index({ business: 1, show: 1, createdAt: -1 });
 const Review = mongoose.model<TReview>('Review', ReviewSchema);
 
 export default Review;

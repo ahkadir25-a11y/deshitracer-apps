@@ -12,10 +12,13 @@ Object.defineProperty(exports, "__esModule", { value: true });
 exports.RotaShiftController = void 0;
 const rota_utils_1 = require("../rota.utils");
 const shift_service_1 = require("./shift.service");
+const socket_1 = require("../../../utils/socket");
 exports.RotaShiftController = {
     create: (req, res, next) => __awaiter(void 0, void 0, void 0, function* () {
+        var _a;
         try {
             const result = yield shift_service_1.RotaShiftService.create(req.body);
+            (0, socket_1.emitToBusiness)((_a = req.body) === null || _a === void 0 ? void 0 : _a.business, 'rota_updated', { action: 'created' });
             res.status(201).json({
                 success: true,
                 message: 'Shift created successfully',
@@ -60,6 +63,7 @@ exports.RotaShiftController = {
             const business = rota_utils_1.RotaUtils.requireObjectId(req.query.business, 'business');
             const id = rota_utils_1.RotaUtils.requireObjectId(req.params.id, 'id');
             const result = yield shift_service_1.RotaShiftService.update(id, business, req.body);
+            (0, socket_1.emitToBusiness)(business, 'rota_updated', { action: 'updated' });
             res.status(200).json({
                 success: true,
                 message: 'Shift updated successfully',
@@ -75,11 +79,48 @@ exports.RotaShiftController = {
             const business = rota_utils_1.RotaUtils.requireObjectId(req.query.business, 'business');
             const id = rota_utils_1.RotaUtils.requireObjectId(req.params.id, 'id');
             const result = yield shift_service_1.RotaShiftService.remove(id, business);
+            (0, socket_1.emitToBusiness)(business, 'rota_updated', { action: 'removed' });
             res.status(200).json({
                 success: true,
                 message: 'Shift removed successfully',
                 data: result,
             });
+        }
+        catch (err) {
+            next(err);
+        }
+    }),
+    // ── Absence cover ──────────────────────────────────────────────────────
+    requestCover: (req, res, next) => __awaiter(void 0, void 0, void 0, function* () {
+        try {
+            const business = rota_utils_1.RotaUtils.requireObjectId(req.query.business, 'business');
+            const id = rota_utils_1.RotaUtils.requireObjectId(req.params.id, 'id');
+            const result = yield shift_service_1.RotaShiftService.requestCover(id, business, req.body);
+            (0, socket_1.emitToBusiness)(business, 'rota_updated', { action: 'cover_requested' });
+            res.status(200).json({ success: true, message: 'Cover requested', data: result });
+        }
+        catch (err) {
+            next(err);
+        }
+    }),
+    assignCover: (req, res, next) => __awaiter(void 0, void 0, void 0, function* () {
+        try {
+            const business = rota_utils_1.RotaUtils.requireObjectId(req.query.business, 'business');
+            const id = rota_utils_1.RotaUtils.requireObjectId(req.params.id, 'id');
+            const result = yield shift_service_1.RotaShiftService.assignCover(id, business, req.body);
+            (0, socket_1.emitToBusiness)(business, 'rota_updated', { action: 'cover_assigned' });
+            res.status(200).json({ success: true, message: 'Cover assigned', data: result });
+        }
+        catch (err) {
+            next(err);
+        }
+    }),
+    availableForCover: (req, res, next) => __awaiter(void 0, void 0, void 0, function* () {
+        try {
+            const business = rota_utils_1.RotaUtils.requireObjectId(req.query.business, 'business');
+            const id = rota_utils_1.RotaUtils.requireObjectId(req.params.id, 'id');
+            const result = yield shift_service_1.RotaShiftService.availableForCover(id, business);
+            res.status(200).json({ success: true, message: 'Available staff resolved', data: result });
         }
         catch (err) {
             next(err);

@@ -65,9 +65,32 @@ const resetPassword = (0, handleAsyncRequest_1.default)((req, res) => __awaiter(
         data: { accessToken: result === null || result === void 0 ? void 0 : result.accessToken },
     });
 }));
+// Request a 6-digit reset code by email (in-app reset, no link)
+const requestResetCode = (0, handleAsyncRequest_1.default)((req, res) => __awaiter(void 0, void 0, void 0, function* () {
+    const result = yield auth_services_1.AuthServices.requestResetCode(req.body);
+    (0, sendResponse_1.default)(res, {
+        success: true,
+        statusCode: 200,
+        message: 'If that email is registered, a reset code has been sent.',
+        data: result,
+    });
+}));
+// Reset password using the emailed code
+const resetPasswordWithCode = (0, handleAsyncRequest_1.default)((req, res) => __awaiter(void 0, void 0, void 0, function* () {
+    const result = yield auth_services_1.AuthServices.resetPasswordWithCode(req.body);
+    (0, setCookie_1.setCookie)(result === null || result === void 0 ? void 0 : result.accessToken, res);
+    (0, sendResponse_1.default)(res, {
+        success: true,
+        statusCode: 200,
+        message: 'Password has been reset successfully!',
+        data: { accessToken: result === null || result === void 0 ? void 0 : result.accessToken },
+    });
+}));
 exports.AuthControllers = {
     loginUser,
     logoutUser,
     forgotPassword,
     resetPassword,
+    requestResetCode,
+    resetPasswordWithCode,
 };

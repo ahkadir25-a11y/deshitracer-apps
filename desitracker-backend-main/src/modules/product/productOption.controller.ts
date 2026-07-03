@@ -14,7 +14,7 @@ const getUserIdFromRequest = (req: AuthRequest): string | null => {
     req.user?.id ||
     req.user?._id ||
     req.body?.userId ||
-    (req.query?.userId as string) ||
+    ((req.query?.userId as any) as string) ||
     req.params?.userId ||
     null
   );

@@ -16,6 +16,9 @@ exports.hashPassword = void 0;
 const bcrypt_1 = __importDefault(require("bcrypt"));
 const config_1 = __importDefault(require("../../config"));
 const hashPassword = (password) => __awaiter(void 0, void 0, void 0, function* () {
-    return yield bcrypt_1.default.hash(password, Number(config_1.default.saltRounds));
+    // Guard against a missing/typo'd BCRYPT_SALT_ROUNDS env (Number(undefined) -> NaN,
+    // which makes bcrypt throw on every signup). Fall back to a safe cost factor of 12.
+    const rounds = Number(config_1.default.saltRounds) || 12;
+    return yield bcrypt_1.default.hash(password, rounds);
 });
 exports.hashPassword = hashPassword;

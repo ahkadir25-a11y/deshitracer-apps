@@ -2,7 +2,7 @@ import { Model } from 'mongoose';
 
 type TUserStatus = 'new' | 'suspicious' | 'verified';
 
-type TRole = 'user' | 'admin' | 'business_owner';
+type TRole = 'user' | 'admin' | 'business_owner' | 'staff';
 
 export type TContact = {
   address: string;
@@ -24,7 +24,11 @@ export type TUser = {
   contact: TContact;
   isBlocked: boolean;
   isDeleted: boolean;
-  profilePicUrl?: string
+  profilePicUrl?: string;
+  coverPhotoUrl?: string;
+  expoPushToken?: string | null;
+  passwordResetCode?: string | null;
+  passwordResetCodeExpires?: Date | null;
 };
 
 export interface UserModel extends Model<TUser> {

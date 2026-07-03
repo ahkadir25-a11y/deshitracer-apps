@@ -12,6 +12,17 @@ const rotaShiftSchema = new mongoose_1.Schema({
     location: { type: String, trim: true, default: '' },
     notes: { type: String, default: '' },
     status: { type: String, enum: ['DRAFT', 'PUBLISHED', 'CANCELLED'], default: 'DRAFT', index: true },
+    coverStatus: {
+        type: String,
+        enum: ['NORMAL', 'NEEDS_COVER', 'COVERED'],
+        default: 'NORMAL',
+        index: true,
+    },
+    originalEmployee: { type: mongoose_1.Schema.Types.ObjectId, ref: 'RotaEmployee', default: null },
+    coverNote: { type: String, default: '' },
+    // Stamped once the 1-hour-before push reminder is sent.
+    pushReminderSentAt: { type: Date, default: null },
+    ownerMandatedOvertime: { type: Boolean, default: false },
     isDeleted: { type: Boolean, default: false, index: true },
 }, { timestamps: true });
 // Fast range queries (weekly/daily rota views)

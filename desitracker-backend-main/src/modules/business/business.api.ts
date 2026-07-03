@@ -35,4 +35,18 @@ router.delete(
   BusinessControllers.deleteBusiness,
 );
 
+// Manager PIN — set (owner / admin only)
+router.post(
+  '/manager-pin/set',
+  auth(USER_ROLE.ADMIN, USER_ROLE.BUSINESS_OWNER),
+  BusinessControllers.setManagerPin,
+);
+
+// Manager PIN — verify (any authenticated staff can attempt)
+router.post(
+  '/manager-pin/verify',
+  auth(USER_ROLE.ADMIN, USER_ROLE.BUSINESS_OWNER, USER_ROLE.USER, USER_ROLE.STAFF),
+  BusinessControllers.verifyManagerPin,
+);
+
 export const BusinessRoutes = router;

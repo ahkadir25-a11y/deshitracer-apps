@@ -6,21 +6,22 @@ import AppError from '../errors/AppError';
 import { User } from '../modules/user/user/user.model';
 import handleAsyncRequest from '../utils/handleAsyncRequest';
 import { JwtHelpers } from '../utils/jwt';
-
-type TUserRole = {};
+import { TUserRole } from '../modules/user/auth/auth.constants';
 
 const auth = (...requiredRoles: TUserRole[]) => {
   return handleAsyncRequest(
     async (req: Request, res: Response, next: NextFunction) => {
-      const token = req.headers.authorization;
+      const authHeader = req.headers.authorization;
 
       // check if client has token
-      if (!token) {
+      if (!authHeader || !authHeader.startsWith('Bearer ')) {
         throw new AppError(
           httpStatus.UNAUTHORIZED,
           'You are not authorized. please login.',
         );
       }
+
+      const token = authHeader.slice(7);
 
       // check if the token is valid
       const decodedUser = JwtHelpers.verifyToken(

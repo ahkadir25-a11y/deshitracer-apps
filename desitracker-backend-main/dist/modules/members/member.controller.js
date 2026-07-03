@@ -45,7 +45,7 @@ var __importDefault = (this && this.__importDefault) || function (mod) {
     return (mod && mod.__esModule) ? mod : { "default": mod };
 };
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.sendPromotionToLeadsController = exports.listMyLeadsController = exports.removeLeadController = exports.addLeadController = exports.acceptDeactivationRequestController = exports.listDeactivationRequestsController = exports.myDeactivationRequestsController = exports.createDeactivationRequestController = exports.getRestaurantOffersController = exports.setStatusBySerialController = exports.pagedSearchMembersController = exports.searchBySerialController = exports.lookupBySerialController = exports.verifyBySlugController = exports.deleteMeController = exports.setStatusController = exports.uploadProfileImageController = exports.updateMeController = exports.meController = exports.loginController = exports.registerController = void 0;
+exports.sendPromotionToLeadsController = exports.listMyLeadsController = exports.removeLeadController = exports.addLeadController = exports.acceptDeactivationRequestController = exports.listDeactivationRequestsController = exports.myDeactivationRequestsController = exports.createDeactivationRequestController = exports.getRestaurantOffersController = exports.setStatusBySerialController = exports.pagedSearchMembersController = exports.searchBySerialController = exports.lookupBySerialController = exports.verifyBySlugController = exports.getScanHistoryController = exports.savePushTokenController = exports.deleteMeController = exports.setStatusController = exports.uploadProfileImageController = exports.updateMeController = exports.meController = exports.loginController = exports.registerController = void 0;
 const memberService = __importStar(require("./member.service"));
 const jsonwebtoken_1 = __importDefault(require("jsonwebtoken"));
 const config_1 = require("../../middlewares/config");
@@ -140,9 +140,29 @@ const deleteMeController = (req, res) => __awaiter(void 0, void 0, void 0, funct
     res.json({ message: 'Account deleted and all data removed.' });
 });
 exports.deleteMeController = deleteMeController;
+const savePushTokenController = (req, res) => __awaiter(void 0, void 0, void 0, function* () {
+    var _a;
+    const token = (_a = req.body) === null || _a === void 0 ? void 0 : _a.token;
+    if (!token || typeof token !== 'string') {
+        res.status(400).json({ message: 'Field "token" is required' });
+        return;
+    }
+    yield memberService.saveMemberPushToken(req.member.id, token);
+    res.json({ ok: true });
+});
+exports.savePushTokenController = savePushTokenController;
+exports.getScanHistoryController = (0, handleAsyncRequest_1.default)((req, res) => __awaiter(void 0, void 0, void 0, function* () {
+    const memberId = req.member.id;
+    const page = Number(req.query.page) || 1;
+    const limit = Number(req.query.limit) || 20;
+    const data = yield memberService.getScanHistory(memberId, page, limit);
+    res.json(data);
+}));
 // ---------- Wrapped controllers must be Promise<void> and never return Response ----------
 exports.verifyBySlugController = (0, handleAsyncRequest_1.default)((req, res) => __awaiter(void 0, void 0, void 0, function* () {
-    const data = yield memberService.verifyBySlug(req.params.slug);
+    const businessId = typeof req.query.businessId === 'string' ? req.query.businessId : undefined;
+    const businessName = typeof req.query.businessName === 'string' ? req.query.businessName : undefined;
+    const data = yield memberService.verifyBySlug(req.params.slug, businessId, businessName);
     res.json(data);
 }));
 exports.lookupBySerialController = (0, handleAsyncRequest_1.default)((req, res) => __awaiter(void 0, void 0, void 0, function* () {
@@ -240,13 +260,18 @@ exports.acceptDeactivationRequestController = (0, handleAsyncRequest_1.default)(
     res.json(data);
 }));
 exports.addLeadController = (0, handleAsyncRequest_1.default)((req, res) => __awaiter(void 0, void 0, void 0, function* () {
-    const { memberId, ownerId } = (req.body || {});
-    if (!memberId) {
-        res.status(400).json({ message: 'Field "memberId" is required' });
+    var _a;
+    // Owner identity comes from the authenticated token — NEVER the request body.
+    // Previously `ownerId` was attacker-controlled, so any business user could
+    // add/read/modify another owner's leads (cross-tenant IDOR).
+    const ownerId = (_a = req.user) === null || _a === void 0 ? void 0 : _a.id;
+    const { memberId } = (req.body || {});
+    if (!ownerId) {
+        res.status(401).json({ message: 'Not authenticated' });
         return;
     }
-    if (!ownerId) {
-        res.status(400).json({ message: 'Field "ownerId" is required' });
+    if (!memberId) {
+        res.status(400).json({ message: 'Field "memberId" is required' });
         return;
     }
     try {
@@ -268,9 +293,9 @@ exports.addLeadController = (0, handleAsyncRequest_1.default)((req, res) => __aw
 }));
 exports.removeLeadController = (0, handleAsyncRequest_1.default)((req, res) => __awaiter(void 0, void 0, void 0, function* () {
     var _a;
-    const ownerId = (_a = req.query.ownerId) === null || _a === void 0 ? void 0 : _a.toString();
+    const ownerId = (_a = req.user) === null || _a === void 0 ? void 0 : _a.id;
     if (!ownerId) {
-        res.status(400).json({ message: 'Field "ownerId" is required' });
+        res.status(401).json({ message: 'Not authenticated' });
         return;
     }
     const leadMemberId = req.params.memberId;
@@ -293,9 +318,9 @@ exports.removeLeadController = (0, handleAsyncRequest_1.default)((req, res) => _
 }));
 exports.listMyLeadsController = (0, handleAsyncRequest_1.default)((req, res) => __awaiter(void 0, void 0, void 0, function* () {
     var _a, _b, _c;
-    const ownerId = (_a = req.query.ownerId) === null || _a === void 0 ? void 0 : _a.toString();
+    const ownerId = (_a = req.user) === null || _a === void 0 ? void 0 : _a.id;
     if (!ownerId) {
-        res.status(400).json({ message: 'Field "ownerId" is required' });
+        res.status(401).json({ message: 'Not authenticated' });
         return;
     }
     const q = typeof req.query.q === 'string' ? req.query.q : undefined;
@@ -305,7 +330,15 @@ exports.listMyLeadsController = (0, handleAsyncRequest_1.default)((req, res) => 
     res.json(data);
 }));
 exports.sendPromotionToLeadsController = (0, handleAsyncRequest_1.default)((req, res) => __awaiter(void 0, void 0, void 0, function* () {
-    const { offerId, subject, message, ownerId } = (req.body || {});
+    var _a;
+    const { offerId, subject, message } = (req.body || {});
+    // Sender identity from the token only — stops one owner blasting promos to
+    // another owner's leads by passing an arbitrary ownerId.
+    const ownerId = (_a = req.user) === null || _a === void 0 ? void 0 : _a.id;
+    if (!ownerId) {
+        res.status(401).json({ message: 'Not authenticated' });
+        return;
+    }
     if (!offerId) {
         res.status(400).json({ message: 'Field "offerId" is required' });
         return;

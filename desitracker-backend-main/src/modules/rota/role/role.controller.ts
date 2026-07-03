@@ -1,11 +1,15 @@
 import { NextFunction, Request, Response } from 'express';
 import { RotaUtils } from '../rota.utils';
 import { RotaRoleService } from './role.service';
+import { emitToBusiness } from '../../../utils/socket';
 
 export const RotaRoleController = {
   create: async (req: Request, res: Response, next: NextFunction) => {
     try {
       const result = await RotaRoleService.create(req.body);
+      // Tell connected clients (staff whose role this is) to re-pull their
+      // permissions so a newly-granted feature shows up without a manual reload.
+      emitToBusiness(req.body?.business, 'rota_updated', { action: 'role_created' });
       res.status(201).json({
         success: true,
         message: 'Role created successfully',
@@ -33,7 +37,7 @@ export const RotaRoleController = {
   getById: async (req: Request, res: Response, next: NextFunction) => {
     try {
       const business = RotaUtils.requireObjectId(req.query.business, 'business');
-      const id = RotaUtils.requireObjectId(req.params.id, 'id');
+      const id = RotaUtils.requireObjectId((req.params.id as string), 'id');
 
       const result = await RotaRoleService.getById(id, business);
       res.status(200).json({
@@ -49,9 +53,10 @@ export const RotaRoleController = {
   update: async (req: Request, res: Response, next: NextFunction) => {
     try {
       const business = RotaUtils.requireObjectId(req.query.business, 'business');
-      const id = RotaUtils.requireObjectId(req.params.id, 'id');
+      const id = RotaUtils.requireObjectId((req.params.id as string), 'id');
 
       const result = await RotaRoleService.update(id, business, req.body);
+      emitToBusiness(business, 'rota_updated', { action: 'role_updated' });
       res.status(200).json({
         success: true,
         message: 'Role updated successfully',
@@ -65,9 +70,10 @@ export const RotaRoleController = {
   remove: async (req: Request, res: Response, next: NextFunction) => {
     try {
       const business = RotaUtils.requireObjectId(req.query.business, 'business');
-      const id = RotaUtils.requireObjectId(req.params.id, 'id');
+      const id = RotaUtils.requireObjectId((req.params.id as string), 'id');
 
       const result = await RotaRoleService.remove(id, business);
+      emitToBusiness(business, 'rota_updated', { action: 'role_removed' });
       res.status(200).json({
         success: true,
         message: 'Role removed successfully',

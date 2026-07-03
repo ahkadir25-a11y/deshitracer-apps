@@ -14,22 +14,28 @@ var __importDefault = (this && this.__importDefault) || function (mod) {
 Object.defineProperty(exports, "__esModule", { value: true });
 const nodemailer_1 = __importDefault(require("nodemailer"));
 const config_1 = __importDefault(require("../../config"));
+// Create the transporter once at startup to reuse connections
+const transporter = nodemailer_1.default.createTransport({
+    host: config_1.default.smptHost,
+    port: Number(config_1.default.smptPort),
+    secure: Number(config_1.default.smptPort) === 465, // true for 465, false for other ports (like 587)
+    auth: {
+        user: config_1.default.nodemailerUser,
+        pass: config_1.default.nodemailerPass,
+    },
+    // debug: true, // Only enable if needed
+    // logger: true 
+});
 const sendEmail = (options) => __awaiter(void 0, void 0, void 0, function* () {
-    const transporter = nodemailer_1.default.createTransport({
-        host: config_1.default.smptHost,
-        port: config_1.default.smptPort,
-        secure: true,
-        auth: {
-            user: config_1.default.nodemailerUser,
-            pass: config_1.default.nodemailerPass,
-        },
-        debug: true, // Add this
-        logger: true // And this
-    });
-    // Verify the connection configuration
-    yield transporter.verify();
+    // Show the business name as the sender's display name when provided, so a
+    // recipient sees e.g. "Rech Tech" instead of the generic mailbox. SMTP only
+    // allows our one authenticated address, but the display name is free-form.
+    // Falls back to the company name, then the raw mailbox.
+    const senderName = options.fromName || config_1.default.companyName || 'Deshi Tracker';
+    const fromAddress = config_1.default.nodemailerUser;
+    const from = `"${String(senderName).replace(/"/g, '')}" <${fromAddress}>`;
     const mailOptions = {
-        from: config_1.default.nodemailerUser,
+        from,
         to: options.email,
         subject: options.subject,
         html: options.message,
@@ -42,13 +48,10 @@ const sendEmail = (options) => __awaiter(void 0, void 0, void 0, function* () {
     try {
         // Sending the email and capturing the result
         const result = yield transporter.sendMail(mailOptions);
-        // // Logging the message ID from the result
-        // console.log(`Email sent successfully! Message ID: ${JSON.stringify(result)}`);
-        // // Return the message ID or other relevant details
         return result === null || result === void 0 ? void 0 : result.messageId;
     }
     catch (error) {
-        console.error(`Failed to send email: ${error === null || error === void 0 ? void 0 : error.message}`);
+        console.error(`Failed to send email to ${options.email}: ${error === null || error === void 0 ? void 0 : error.message}`);
         throw new Error('Failed to send email');
     }
 });

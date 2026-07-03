@@ -54,6 +54,9 @@ exports.RotaShiftValidation = {
             }
             dto.status = payload.status;
         }
+        if ((payload === null || payload === void 0 ? void 0 : payload.ownerMandatedOvertime) !== undefined) {
+            dto.ownerMandatedOvertime = rota_utils_1.RotaUtils.parseBoolean(payload.ownerMandatedOvertime);
+        }
         return dto;
     },
     businessFromQuery(query) {

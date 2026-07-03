@@ -21,4 +21,8 @@ router.get('/:slug', business_controller_1.BusinessControllers.getSingleBusiness
 router.put('/:slug', (0, auth_1.default)(auth_constants_1.USER_ROLE.ADMIN, auth_constants_1.USER_ROLE.BUSINESS_OWNER), business_controller_1.BusinessControllers.updateBusiness);
 // Delete a business by slug (Admin and owner)
 router.delete('/:slug', (0, auth_1.default)(auth_constants_1.USER_ROLE.ADMIN, auth_constants_1.USER_ROLE.BUSINESS_OWNER), business_controller_1.BusinessControllers.deleteBusiness);
+// Manager PIN — set (owner / admin only)
+router.post('/manager-pin/set', (0, auth_1.default)(auth_constants_1.USER_ROLE.ADMIN, auth_constants_1.USER_ROLE.BUSINESS_OWNER), business_controller_1.BusinessControllers.setManagerPin);
+// Manager PIN — verify (any authenticated staff can attempt)
+router.post('/manager-pin/verify', (0, auth_1.default)(auth_constants_1.USER_ROLE.ADMIN, auth_constants_1.USER_ROLE.BUSINESS_OWNER, auth_constants_1.USER_ROLE.USER, auth_constants_1.USER_ROLE.STAFF), business_controller_1.BusinessControllers.verifyManagerPin);
 exports.BusinessRoutes = router;

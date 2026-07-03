@@ -3,11 +3,14 @@ import { Business } from "../business/business.model";
 import ProductCategory, { IProductCategory } from "./categoryModel";
 import DayOffer, { IDayOffer, Weekday } from "./dayOffer.model";
 import Product, { IProduct } from "./product.model";
+import { Member } from "../members/member.model";
+import { sendExpoPush } from "../../utils/lib/push";
 
 interface IProductData {
   name: string;
   price: number;
   description: string;
+  tags?: string[];
   images: { url: string; description: string }[];
   thumbnail: string;
   user_id: string;
@@ -29,6 +32,7 @@ export const addProduct = async ({
   name,
   price,
   description,
+  tags = [],
   images,
   thumbnail,
   user_id,
@@ -47,6 +51,7 @@ export const addProduct = async ({
     name,
     price,
     description,
+    tags,
     images,
     thumbnail,
     user_id,
@@ -186,7 +191,36 @@ export async function createDayOffer(data: {
   const total = await countDayOffersForBusiness(data.business_id);
   if (total >= 7) throw new Error('You already have 7 day offers for this business.');
   const doc = new DayOffer(data as any);
-  return doc.save();
+  const saved = await doc.save();
+
+  // notify all active members with a push token (fire-and-forget)
+  notifyMembersNewOffer(data.business_id, data.discount_percent, data.day).catch(() => {});
+
+  return saved;
+}
+
+async function notifyMembersNewOffer(businessId: string, discountPercent: number, day: string) {
+  const business = await Business.findById(businessId).select('businessName').lean();
+  const name = (business as any)?.businessName || 'A business';
+
+  const members = await Member.find({ active: true, expoPushToken: { $ne: null }, deletedAt: null })
+    .select('expoPushToken')
+    .lean();
+
+  const tokens = members.map((m: any) => m.expoPushToken).filter(Boolean) as string[];
+  if (!tokens.length) return;
+
+  // send in batches of 100 (Expo limit)
+  for (let i = 0; i < tokens.length; i += 100) {
+    const batch = tokens.slice(i, i + 100).map((to) => ({
+      to,
+      title: '🎉 New Member Offer!',
+      body: `${name} is offering ${discountPercent}% off every ${day}. Show your member card!`,
+      data: { type: 'NEW_OFFER', businessId },
+      channelId: 'member-offers',
+    }));
+    await sendExpoPush(batch);
+  }
 }
 
 export async function listDayOffers(filters: {

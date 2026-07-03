@@ -68,9 +68,38 @@ const resetPassword = handleAsyncRequest(
   },
 );
 
+// Request a 6-digit reset code by email (in-app reset, no link)
+const requestResetCode = handleAsyncRequest(
+  async (req: Request, res: Response) => {
+    const result = await AuthServices.requestResetCode(req.body);
+    sendResponse(res, {
+      success: true,
+      statusCode: 200,
+      message: 'If that email is registered, a reset code has been sent.',
+      data: result,
+    });
+  },
+);
+
+// Reset password using the emailed code
+const resetPasswordWithCode = handleAsyncRequest(
+  async (req: Request, res: Response) => {
+    const result = await AuthServices.resetPasswordWithCode(req.body);
+    setCookie(result?.accessToken, res);
+    sendResponse(res, {
+      success: true,
+      statusCode: 200,
+      message: 'Password has been reset successfully!',
+      data: { accessToken: result?.accessToken },
+    });
+  },
+);
+
 export const AuthControllers = {
   loginUser,
   logoutUser,
   forgotPassword,
   resetPassword,
+  requestResetCode,
+  resetPasswordWithCode,
 };

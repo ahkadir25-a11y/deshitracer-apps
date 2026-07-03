@@ -47,6 +47,9 @@ const userSchema = new mongoose.Schema<TUser, UserModel>(
       type: String,
       required: [true, 'Please enter your phone number'],
       validate: [validator.isMobilePhone, 'Please enter a valid phone number'],
+      // Indexed because login can look users up by phone. Not `unique` yet —
+      // existing data may contain duplicates; dedupe before adding uniqueness.
+      index: true,
     },
     fbProfile: {
       type: String,
@@ -56,12 +59,16 @@ const userSchema = new mongoose.Schema<TUser, UserModel>(
       type: String,
       trim: true,
     },
+    coverPhotoUrl: {
+      type: String,
+      trim: true,
+    },
     role: {
       type: String,
       enum: {
-        values: ['user', 'admin', 'business_owner'],
+        values: ['user', 'admin', 'business_owner', 'staff'],
         message:
-          '{VALUE} is not a valid role. Allowed roles are: user, admin, business_owner.',
+          '{VALUE} is not a valid role. Allowed roles are: user, admin, business_owner, staff.',
       },
       default: 'business_owner',
     },
@@ -70,6 +77,11 @@ const userSchema = new mongoose.Schema<TUser, UserModel>(
     },
     isBlocked: { type: Boolean, default: false },
     isDeleted: { type: Boolean, default: false },
+    expoPushToken: { type: String, default: null },
+    // 6-digit numeric code for in-app password reset (no web link). Cleared
+    // once used or expired. `select: false` so it never leaks in normal reads.
+    passwordResetCode: { type: String, select: false, default: null },
+    passwordResetCodeExpires: { type: Date, select: false, default: null },
   },
   {
     timestamps: true,
@@ -85,10 +97,11 @@ const userSchema = new mongoose.Schema<TUser, UserModel>(
 
 // Hash password before save
 userSchema.pre('validate', async function (next) {
-  if (!this.isModified('password')) {
+  const user = this as any;
+  if (!user.isModified('password')) {
     return next();
   }
-  this.password = await hashPassword(this.password);
+  user.password = await hashPassword(user.password);
 
   next();
 });

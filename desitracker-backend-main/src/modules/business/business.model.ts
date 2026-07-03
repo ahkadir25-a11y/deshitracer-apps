@@ -8,7 +8,9 @@ import {
   TLocation,
   TMedia,
   TMediaUnit,
+  TNotificationSettings,
   TOperationDetails,
+  TServiceSettings,
 } from './business.interface';
 
 const MediaUnitSchema = new Schema<TMediaUnit>({
@@ -76,6 +78,22 @@ const FeaturesSchema = new Schema<TFeatures>({
   },
 });
 
+const ServiceSettingsSchema = new Schema<TServiceSettings>({
+  isReservationEnabled: { type: Boolean, default: false },
+  isPickupEnabled: { type: Boolean, default: false },
+  isDeliveryEnabled: { type: Boolean, default: false },
+  maxGuestsPerReservation: { type: Number, default: 10 },
+  deliveryRadiusKm: { type: Number, default: 5 },
+  minOrderValueDelivery: { type: Number, default: 0 },
+});
+
+// Email-alert switches for the owner. Default ON so notifications keep working
+// for existing businesses; the owner can turn them off in Service Settings.
+const NotificationSettingsSchema = new Schema<TNotificationSettings>({
+  emailOnNewOrder: { type: Boolean, default: true },
+  emailOnNewReservation: { type: Boolean, default: true },
+});
+
 const BusinessSchema = new Schema<TBusiness>(
   {
     businessName: { type: String, unique: true, required: true, trim: true },
@@ -111,6 +129,18 @@ const BusinessSchema = new Schema<TBusiness>(
     isDeleted: { type: Boolean, default: false },
     openingHours: { type: [OpeningHourSchema], default: [] },
     paymentMethods: { type: [String], default: [] },
+    serviceSettings: {
+      type: ServiceSettingsSchema,
+      default: () => ({}),
+    },
+    notificationSettings: {
+      type: NotificationSettingsSchema,
+      default: () => ({}),
+    },
+    // Hashed PIN used by managers / owners to approve risky waiter actions
+    // (large discounts, void approvals, table transfers). Optional —
+    // if unset, the business hasn't enabled PIN-based approvals.
+    managerPin: { type: String, select: false, default: undefined },
   },
   { timestamps: true },
 );

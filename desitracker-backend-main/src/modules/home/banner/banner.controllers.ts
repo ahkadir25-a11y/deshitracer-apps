@@ -30,7 +30,7 @@ const getAllBanners = handleAsyncRequest(
 // Get a single banner by ID
 const getSingleBanner = handleAsyncRequest(
   async (req: Request, res: Response) => {
-    const result = await BannerServices.getSingleBanner(req.params.id);
+    const result = await BannerServices.getSingleBanner((req.params.id as string));
     sendResponse(res, {
       success: true,
       statusCode: 200,
@@ -43,7 +43,7 @@ const getSingleBanner = handleAsyncRequest(
 // Update a banner
 // const updateBanner = handleAsyncRequest(async (req: Request, res: Response) => {
 //   const result = await BannerServices.updateBanner(
-//     req.params.id,
+//     (req.params.id as string),
 //     req.body,
 //     req.file,
 //   );
@@ -57,7 +57,7 @@ const getSingleBanner = handleAsyncRequest(
 
 // Delete a banner
 const deleteBanner = handleAsyncRequest(async (req: Request, res: Response) => {
-  await BannerServices.deleteBanner(req.params.id);
+  await BannerServices.deleteBanner((req.params.id as string));
   sendResponse(res, {
     success: true,
     statusCode: 200,

@@ -86,6 +86,22 @@ export const OpeningHourSchema = new Schema<TOpeningHour>({
   end: { type: String },
 });
 
+export type TServiceSettings = {
+  isReservationEnabled: boolean;
+  isPickupEnabled: boolean;
+  isDeliveryEnabled: boolean;
+  maxGuestsPerReservation?: number;
+  deliveryRadiusKm?: number;
+  minOrderValueDelivery?: number;
+};
+
+// Per-business switches for the email alerts sent to the owner. Both default
+// to true so existing businesses keep getting notified until they opt out.
+export type TNotificationSettings = {
+  emailOnNewOrder?: boolean;
+  emailOnNewReservation?: boolean;
+};
+
 export type TBusiness = {
   businessName: string;
   checkoutNumber: string;
@@ -113,4 +129,7 @@ export type TBusiness = {
   openingHours: TOpeningHour[];
   googleMapLink: string;
   paymentMethods: string[];
+  serviceSettings?: TServiceSettings;
+  notificationSettings?: TNotificationSettings;
+  managerPin?: string; // hashed; used for risky-action approval at POS
 };

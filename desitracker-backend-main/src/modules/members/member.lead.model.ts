@@ -10,7 +10,7 @@ export interface IMemberLead extends Document {
 
 const MemberLeadSchema = new Schema<IMemberLead>(
   {
-    owner_member_id: { type: Schema.Types.ObjectId, ref: 'Member', required: true, index: true },
+    owner_member_id: { type: Schema.Types.ObjectId, ref: 'User', required: true, index: true },
     lead_member_id: { type: Schema.Types.ObjectId, ref: 'Member', required: true, index: true },
   },
   { timestamps: true }

@@ -17,6 +17,9 @@ export const RotaRoleService = {
         description: dto.description ?? '',
         isActive: dto.isActive ?? true,
         isDeleted: false,
+        // Permissions sub-doc is initialized with schema defaults (all false),
+        // then overlaid with whatever the caller sent.
+        ...(dto.permissions ? { permissions: dto.permissions } : {}),
       });
       return doc;
     } catch (e: any) {
@@ -61,10 +64,21 @@ export const RotaRoleService = {
   async update(id: string, business: string, payload: any) {
     const dto = RotaRoleValidation.update(payload);
 
+    // Build $set with permissions dot-notated. Without this a partial
+    // { permissions: { canViewOrders: true } } would replace the whole sub-doc
+    // and wipe the other flags.
+    const { permissions, ...rest } = dto;
+    const setOps: Record<string, unknown> = { ...rest };
+    if (permissions) {
+      for (const [k, v] of Object.entries(permissions)) {
+        setOps[`permissions.${k}`] = v;
+      }
+    }
+
     try {
       const doc = await RotaRole.findOneAndUpdate(
         { _id: id, business, isDeleted: false },
-        dto,
+        { $set: setOps },
         { new: true, runValidators: true }
       );
       if (!doc) throw new AppError(404, 'Role not found');

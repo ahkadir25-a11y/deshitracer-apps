@@ -1,4 +1,5 @@
 import { Member, getNextSerial, IMember } from './member.model';
+import { MemberScan } from './member.scan.model';
 import QRCode from 'qrcode';
 import fs from 'fs';
 import path from 'path';
@@ -12,6 +13,7 @@ import { Types } from 'mongoose';
 import { MemberLead } from './member.lead.model';
 import DayOffer from "../product/dayOffer.model";
 import sendEmail from '../../utils/lib/sendEmail';
+import { User } from '../user/user/user.model';
 
 // small helper: chunk array
 function chunk<T>(arr: T[], size: number) {
@@ -218,7 +220,7 @@ export async function listMyLeads(opts: { ownerMemberId: string; page?: number; 
   const { ownerMemberId, page = 1, limit = 20, q } = opts;
 
   const _page = Math.max(1, Number(page) || 1);
-  const _limit = Math.max(1, Number(limit) || 20);
+  const _limit = Math.min(100, Math.max(1, Number(limit) || 20));
   const skip = (_page - 1) * _limit;
 
   // Filter lead members by q (optional)
@@ -334,6 +336,28 @@ async function createAndUploadQR(serial: string, slug: string): Promise<string> 
 export async function registerMember(payload: {
   name: string; phone: string; password: string; city?: string; email?: string;
 }): Promise<IMember> {
+  // One email = one role across the whole platform: an email already used by
+  // a staff/owner/admin account (User collection) can't also become a member.
+  if (payload.email) {
+    const emailLc = payload.email.toLowerCase();
+    const existingUser = await User.findOne({ email: emailLc, isDeleted: { $ne: true } });
+    if (existingUser) {
+      const label =
+        existingUser.role === 'business_owner' ? 'Business Owner'
+        : existingUser.role === 'staff' ? 'Staff'
+        : existingUser.role === 'admin' ? 'Admin'
+        : 'user';
+      throw new Error(
+        `This email is already registered as a ${label} account. Please sign in there instead, or use a different email address.`,
+      );
+    }
+    const existingMember = await Member.findOne({ email: emailLc, deletedAt: null });
+    if (existingMember) {
+      throw new Error('This email is already registered as a Member. Please sign in instead.');
+    }
+    payload.email = emailLc;
+  }
+
   const serial = await getNextSerial();
   const slug = generateQrSlug();
   const qrCodeUrl = await createAndUploadQR(serial, slug);
@@ -390,9 +414,18 @@ export async function deleteMember(id: string) {
   await Member.findByIdAndDelete(id);
 }
 
-export async function verifyBySlug(slug: string) {
+export async function verifyBySlug(slug: string, businessId?: string, businessName?: string) {
   const m = await Member.findOne({ qrSlug: slug });
   if (!m || m.deletedAt) return { valid: false };
+
+  // log scan for discount history
+  MemberScan.create({
+    member: m._id,
+    businessId: businessId || undefined,
+    businessName: businessName || undefined,
+    scannedAt: new Date(),
+  }).catch(() => {});
+
   return {
     valid: m.active && !m.deletedAt,
     name: m.name,
@@ -406,9 +439,11 @@ export async function verifyBySlug(slug: string) {
 export async function lookupBySerial(serial: string) {
   const m = await Member.findOne({ serialNumber: serial, deletedAt: null });
   if (!m) return null;
+  // This route is PUBLIC (membership verification). Do NOT expose phone here —
+  // serials are enumerable, so returning phone leaks member contact info to
+  // anyone. Name + status is enough to verify a membership at point of sale.
   return {
     name: m.name,
-    phone: m.phone,
     serialNumber: m?.serialNumber,
     verification: m.active ? 'Active member' : 'Inactive member',
     printable: true
@@ -447,7 +482,7 @@ export async function pagedMemberSearch(opts: { q?: string; page: number; limit:
   }
 
   const _page = Math.max(1, Number(page) || 1);
-  const _limit = Math.max(1, Number(limit) || 10);
+  const _limit = Math.min(100, Math.max(1, Number(limit) || 10));
   const skip = (_page - 1) * _limit;
 
   const [items, total] = await Promise.all([
@@ -630,7 +665,7 @@ export async function findRestaurantOffers(opts: OfferSearchOpts) {
 
   /* -------------------------------- Pagination -------------------------------- */
   const pageNum = Math.max(1, Number(page) || 1);
-  const limitNum = Math.max(1, Number(limit) || 12);
+  const limitNum = Math.min(100, Math.max(1, Number(limit) || 12));
   const skip = (pageNum - 1) * limitNum;
 
   const paged = await Product.aggregate([
@@ -714,7 +749,7 @@ export async function listDeactivationRequests(opts: {
   }
 
   const _page = Math.max(1, Number(page) || 1);
-  const _limit = Math.max(1, Number(limit) || 20);
+  const _limit = Math.min(100, Math.max(1, Number(limit) || 20));
   const skip = (_page - 1) * _limit;
 
   const [items, total] = await Promise.all([
@@ -734,6 +769,23 @@ export async function listDeactivationRequests(opts: {
 
 export async function listMyDeactivationRequests(memberId: string) {
   return DeactivationRequest.find({ member_id: memberId }).sort({ createdAt: -1 }).lean();
+}
+
+export async function saveMemberPushToken(memberId: string, token: string) {
+  await Member.findByIdAndUpdate(memberId, { expoPushToken: token });
+}
+
+export async function getScanHistory(memberId: string, page = 1, limit = 20) {
+  const skip = (page - 1) * limit;
+  const [items, total] = await Promise.all([
+    MemberScan.find({ member: memberId })
+      .sort({ scannedAt: -1 })
+      .skip(skip)
+      .limit(limit)
+      .lean(),
+    MemberScan.countDocuments({ member: memberId }),
+  ]);
+  return { items, page, limit, total, hasNext: skip + items.length < total };
 }
 
 export async function acceptDeactivationRequest(id: string, processedBy?: string, processedNote?: string) {

@@ -1,23 +1,30 @@
 import nodeMailer from 'nodemailer';
 import config from '../../config';
 
+// Create the transporter once at startup to reuse connections
+const transporter = nodeMailer.createTransport({
+  host: config.smptHost,
+  port: Number(config.smptPort),
+  secure: Number(config.smptPort) === 465, // true for 465, false for other ports (like 587)
+  auth: {
+    user: config.nodemailerUser,
+    pass: config.nodemailerPass,
+  },
+  // debug: true, // Only enable if needed
+  // logger: true 
+} as nodeMailer.TransportOptions);
+
 const sendEmail = async (options: any) => {
-  const transporter = nodeMailer.createTransport({
-    host: config.smptHost,
-    port: config.smptPort,
-    secure: true,
-    auth: {
-      user: config.nodemailerUser,
-      pass: config.nodemailerPass,
-    },
-    debug: true, // Add this
-    logger: true // And this
-  } as nodeMailer.TransportOptions);
-  // Verify the connection configuration
-  await transporter.verify();
+  // Show the business name as the sender's display name when provided, so a
+  // recipient sees e.g. "Rech Tech" instead of the generic mailbox. SMTP only
+  // allows our one authenticated address, but the display name is free-form.
+  // Falls back to the company name, then the raw mailbox.
+  const senderName = options.fromName || config.companyName || 'Deshi Tracker';
+  const fromAddress = config.nodemailerUser;
+  const from = `"${String(senderName).replace(/"/g, '')}" <${fromAddress}>`;
 
   const mailOptions = {
-    from: config.nodemailerUser,
+    from,
     to: options.email,
     subject: options.subject,
     html: options.message,
@@ -31,14 +38,9 @@ const sendEmail = async (options: any) => {
   try {
     // Sending the email and capturing the result
     const result = await transporter.sendMail(mailOptions);
-
-    // // Logging the message ID from the result
-    // console.log(`Email sent successfully! Message ID: ${JSON.stringify(result)}`);
-
-    // // Return the message ID or other relevant details
     return result?.messageId;
   } catch (error: any) {
-    console.error(`Failed to send email: ${error?.message}`);
+    console.error(`Failed to send email to ${options.email}: ${error?.message}`);
     throw new Error('Failed to send email');
   }
 };

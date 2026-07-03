@@ -80,11 +80,33 @@ const getAllBusinessListings = (0, handleAsyncRequest_1.default)((req, res) => _
         data: result.result,
     });
 }));
+const setManagerPin = (0, handleAsyncRequest_1.default)((req, res) => __awaiter(void 0, void 0, void 0, function* () {
+    const { businessId, pin } = req.body || {};
+    const result = yield business_service_1.BusinessServices.setManagerPin(businessId, pin);
+    (0, sendResponse_1.default)(res, {
+        statusCode: http_status_1.default.OK,
+        success: true,
+        message: 'Manager PIN saved',
+        data: result,
+    });
+}));
+const verifyManagerPin = (0, handleAsyncRequest_1.default)((req, res) => __awaiter(void 0, void 0, void 0, function* () {
+    const { businessId, pin } = req.body || {};
+    const result = yield business_service_1.BusinessServices.verifyManagerPin(businessId, pin);
+    (0, sendResponse_1.default)(res, {
+        statusCode: http_status_1.default.OK,
+        success: true,
+        message: 'PIN verified',
+        data: result,
+    });
+}));
 exports.BusinessControllers = {
     registerBusiness,
     updateBusiness,
     getAllBusiness,
     getSingleBusiness,
     deleteBusiness,
-    getAllBusinessListings
+    getAllBusinessListings,
+    setManagerPin,
+    verifyManagerPin,
 };

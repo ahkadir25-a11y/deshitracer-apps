@@ -13,6 +13,7 @@ var __importDefault = (this && this.__importDefault) || function (mod) {
 };
 Object.defineProperty(exports, "__esModule", { value: true });
 const fridge_service_1 = __importDefault(require("./fridge.service"));
+const businessAccess_1 = require("../../utils/lib/businessAccess");
 const getErrorMessage = (err) => {
     if (err instanceof Error)
         return err.message;
@@ -65,6 +66,14 @@ class FridgeController {
         return __awaiter(this, void 0, void 0, function* () {
             try {
                 const { userId } = req.params;
+                // Prevent cross-tenant reads: caller must be the target user, an admin,
+                // or staff of a business owned by that user.
+                const caller = req.user;
+                const allowed = yield (0, businessAccess_1.canAccessUserScopedData)(caller === null || caller === void 0 ? void 0 : caller.id, caller === null || caller === void 0 ? void 0 : caller.role, userId, caller === null || caller === void 0 ? void 0 : caller.email);
+                if (!allowed) {
+                    res.status(403).json({ message: 'You are not authorized to view this data' });
+                    return;
+                }
                 const fridges = yield fridge_service_1.default.getFridgesByUser(userId);
                 // if service returns [] or null/undefined, handle both
                 if (!fridges || (Array.isArray(fridges) && fridges.length === 0)) {

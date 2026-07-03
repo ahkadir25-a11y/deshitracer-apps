@@ -63,7 +63,7 @@ export const getCategories: RequestHandler<{}, any, never, CategoryQuery> = asyn
 
 export const getCategoryById: RequestHandler<CategoryIdParam> = async (req, res, next) => {
   try {
-    const category = await ProductCategory.findById(req.params.id).populate('products');
+    const category = await ProductCategory.findById((req.params.id as string)).populate('products');
     if (!category) {
       res.status(404).json({ message: 'Category not found' });
       return;
@@ -75,7 +75,7 @@ export const getCategoryById: RequestHandler<CategoryIdParam> = async (req, res,
 export const updateCategory: RequestHandler<CategoryIdParam, any, UpdateCategoryDTO> =
   async (req, res, next) => {
     try {
-      const updated = await ProductCategory.findByIdAndUpdate(req.params.id, req.body, { new: true });
+      const updated = await ProductCategory.findByIdAndUpdate((req.params.id as string), req.body, { new: true });
       if (!updated) {
         res.status(404).json({ message: 'Category not found' });
         return;
@@ -88,7 +88,7 @@ export const updateCategory: RequestHandler<CategoryIdParam, any, UpdateCategory
 // Delete has no body; only params
 export const deleteCategory: RequestHandler<CategoryIdParam> = async (req, res, next) => {
   try {
-    const deleted = await ProductCategory.findByIdAndDelete(req.params.id);
+    const deleted = await ProductCategory.findByIdAndDelete((req.params.id as string));
     if (!deleted) {
       res.status(404).json({ message: 'Category not found' });
       return;

@@ -1,10 +1,10 @@
-import { requireMemberAuth } from '../../members/memberAuth';
+import { Router } from 'express';
+import { ContactCountControllers } from '../contactCount/contactCount.controller';
+import { VisitorCountControllers } from './visitorCount.controller';
 
 const router = Router();
 
 router.get('/', VisitorCountControllers.getAdminAnalytics);
-
-router.get('/me/history', requireMemberAuth, VisitorCountControllers.getMemberVisitHistory);
 
 router.get('/:businessId/contact', ContactCountControllers.getContactAnalytics);
 

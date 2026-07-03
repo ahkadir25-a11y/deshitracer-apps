@@ -27,11 +27,11 @@ const addToVisitorCount = (businessId, req) => __awaiter(void 0, void 0, void 0,
         throw new AppError_1.default(404, 'Business not found!');
     // Ensure correct IP detection
     const ipAddress = ((_b = (_a = req.headers['x-forwarded-for']) === null || _a === void 0 ? void 0 : _a.split(',')[0]) === null || _b === void 0 ? void 0 : _b.trim()) || req.socket.remoteAddress || req.ip;
-    const oneMinuteAgo = new Date(Date.now() - 60 * 1000);
+    const cooldownTime = new Date(Date.now() - 30 * 1000);
     const recentVisit = yield visitorCount_model_1.default.findOne({
         business: businessId,
         ipAddress: ipAddress,
-        createdAt: { $gte: oneMinuteAgo },
+        createdAt: { $gte: cooldownTime },
     });
     if (recentVisit) {
         return null;

@@ -90,7 +90,7 @@ const sendImagesToCloudinary = (images, folderName) => __awaiter(void 0, void 0,
                     'video/mp4', 'video/quicktime', 'video/webm', 'video/3gpp', 'video/3gpp2'
                 ];
                 const allowedImageTypes = [
-                    'image/jpeg', 'image/jpg', 'image/png', 'image/heic', 'image/heif', 'image/heics', 'image/heifs', 'image/webp', 'image/avif', 'image/svg+xml'
+                    'image/jpeg', 'image/jpg', 'image/png', 'image/gif', 'image/heic', 'image/heif', 'image/heics', 'image/heifs', 'image/webp', 'image/avif', 'image/svg+xml'
                 ];
                 let resourceType;
                 if (allowedVideoTypes.includes(image.mimetype)) {
@@ -147,9 +147,15 @@ const storage = multer_1.default.diskStorage({
 });
 exports.upload = (0, multer_1.default)({
     storage: storage,
+    // Cap file size and count so a single client can't fill the server disk (DoS).
+    limits: {
+        fileSize: 15 * 1024 * 1024, // 15 MB per file (covers short videos)
+        files: 8,
+    },
     fileFilter: (req, file, cb) => {
+        // SVG removed — it can carry embedded scripts (stored-XSS if ever rendered).
         const allowedTypes = [
-            'image/jpeg', 'image/jpg', 'image/png', 'image/heic', 'image/heif', 'image/webp', 'image/avif', 'image/svg+xml',
+            'image/jpeg', 'image/jpg', 'image/png', 'image/gif', 'image/heic', 'image/heif', 'image/webp', 'image/avif',
             'video/mp4', 'video/quicktime', 'video/webm', 'video/3gpp', 'video/3gpp2'
         ];
         console.log('Checking file:', file.originalname, 'Mimetype:', file.mimetype);

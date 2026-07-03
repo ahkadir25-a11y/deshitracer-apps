@@ -8,4 +8,7 @@ router.post('/login', auth_controllers_1.AuthControllers.loginUser);
 router.post('/logout', auth_controllers_1.AuthControllers.logoutUser);
 router.post('/forgot-password', auth_controllers_1.AuthControllers.forgotPassword);
 router.post('/reset-password/:token', auth_controllers_1.AuthControllers.resetPassword);
+// In-app code (OTP) reset — no web link
+router.post('/forgot-password-code', auth_controllers_1.AuthControllers.requestResetCode);
+router.post('/reset-password-code', auth_controllers_1.AuthControllers.resetPasswordWithCode);
 exports.AuthRoutes = router;

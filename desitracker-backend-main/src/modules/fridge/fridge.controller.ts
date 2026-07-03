@@ -1,5 +1,6 @@
 import { Request, Response } from 'express';
 import fridgeService from './fridge.service';
+import { canAccessUserScopedData } from '../../utils/lib/businessAccess';
 
 const getErrorMessage = (err: unknown): string => {
   if (err instanceof Error) return err.message;
@@ -65,6 +66,20 @@ class FridgeController {
   public async getFridges(req: Request, res: Response): Promise<void> {
     try {
       const { userId } = req.params;
+
+      // Prevent cross-tenant reads: caller must be the target user, an admin,
+      // or staff of a business owned by that user.
+      const caller = (req as any).user;
+      const allowed = await canAccessUserScopedData(
+        caller?.id,
+        caller?.role,
+        userId,
+        caller?.email,
+      );
+      if (!allowed) {
+        res.status(403).json({ message: 'You are not authorized to view this data' });
+        return;
+      }
 
       const fridges = await fridgeService.getFridgesByUser(userId);
 

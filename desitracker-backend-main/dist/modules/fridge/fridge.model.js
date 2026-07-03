@@ -11,7 +11,7 @@ const FridgeRecordSchema = new mongoose_1.Schema({
 const FridgeSchema = new mongoose_1.Schema({
     fridgeName: { type: String, required: true },
     fridgeLocation: { type: String, required: true },
-    userId: { type: String, required: true, ref: 'User' }, // Reference to user (assuming a User model exists)
+    userId: { type: String, required: true, ref: 'User', index: true }, // Reference to user (assuming a User model exists)
     temperatureRecords: [FridgeRecordSchema]
 });
 const Fridge = (0, mongoose_1.model)('Fridge', FridgeSchema);

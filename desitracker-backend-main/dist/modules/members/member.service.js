@@ -32,8 +32,11 @@ exports.findRestaurantOffers = findRestaurantOffers;
 exports.createDeactivationRequest = createDeactivationRequest;
 exports.listDeactivationRequests = listDeactivationRequests;
 exports.listMyDeactivationRequests = listMyDeactivationRequests;
+exports.saveMemberPushToken = saveMemberPushToken;
+exports.getScanHistory = getScanHistory;
 exports.acceptDeactivationRequest = acceptDeactivationRequest;
 const member_model_1 = require("./member.model");
+const member_scan_model_1 = require("./member.scan.model");
 const qrcode_1 = __importDefault(require("qrcode"));
 const fs_1 = __importDefault(require("fs"));
 const path_1 = __importDefault(require("path"));
@@ -47,6 +50,7 @@ const mongoose_1 = require("mongoose");
 const member_lead_model_1 = require("./member.lead.model");
 const dayOffer_model_1 = __importDefault(require("../product/dayOffer.model"));
 const sendEmail_1 = __importDefault(require("../../utils/lib/sendEmail"));
+const user_model_1 = require("../user/user/user.model");
 // small helper: chunk array
 function chunk(arr, size) {
     const out = [];
@@ -211,7 +215,7 @@ function listMyLeads(opts) {
     return __awaiter(this, void 0, void 0, function* () {
         const { ownerMemberId, page = 1, limit = 20, q } = opts;
         const _page = Math.max(1, Number(page) || 1);
-        const _limit = Math.max(1, Number(limit) || 20);
+        const _limit = Math.min(100, Math.max(1, Number(limit) || 20));
         const skip = (_page - 1) * _limit;
         // Filter lead members by q (optional)
         const memberMatch = { deletedAt: null };
@@ -308,6 +312,24 @@ function createAndUploadQR(serial, slug) {
 // ---- services ----
 function registerMember(payload) {
     return __awaiter(this, void 0, void 0, function* () {
+        // One email = one role across the whole platform: an email already used by
+        // a staff/owner/admin account (User collection) can't also become a member.
+        if (payload.email) {
+            const emailLc = payload.email.toLowerCase();
+            const existingUser = yield user_model_1.User.findOne({ email: emailLc, isDeleted: { $ne: true } });
+            if (existingUser) {
+                const label = existingUser.role === 'business_owner' ? 'Business Owner'
+                    : existingUser.role === 'staff' ? 'Staff'
+                        : existingUser.role === 'admin' ? 'Admin'
+                            : 'user';
+                throw new Error(`This email is already registered as a ${label} account. Please sign in there instead, or use a different email address.`);
+            }
+            const existingMember = yield member_model_1.Member.findOne({ email: emailLc, deletedAt: null });
+            if (existingMember) {
+                throw new Error('This email is already registered as a Member. Please sign in instead.');
+            }
+            payload.email = emailLc;
+        }
         const serial = yield (0, member_model_1.getNextSerial)();
         const slug = generateQrSlug();
         const qrCodeUrl = yield createAndUploadQR(serial, slug);
@@ -358,11 +380,18 @@ function deleteMember(id) {
         yield member_model_1.Member.findByIdAndDelete(id);
     });
 }
-function verifyBySlug(slug) {
+function verifyBySlug(slug, businessId, businessName) {
     return __awaiter(this, void 0, void 0, function* () {
         const m = yield member_model_1.Member.findOne({ qrSlug: slug });
         if (!m || m.deletedAt)
             return { valid: false };
+        // log scan for discount history
+        member_scan_model_1.MemberScan.create({
+            member: m._id,
+            businessId: businessId || undefined,
+            businessName: businessName || undefined,
+            scannedAt: new Date(),
+        }).catch(() => { });
         return {
             valid: m.active && !m.deletedAt,
             name: m.name,
@@ -378,9 +407,11 @@ function lookupBySerial(serial) {
         const m = yield member_model_1.Member.findOne({ serialNumber: serial, deletedAt: null });
         if (!m)
             return null;
+        // This route is PUBLIC (membership verification). Do NOT expose phone here —
+        // serials are enumerable, so returning phone leaks member contact info to
+        // anyone. Name + status is enough to verify a membership at point of sale.
         return {
             name: m.name,
-            phone: m.phone,
             serialNumber: m === null || m === void 0 ? void 0 : m.serialNumber,
             verification: m.active ? 'Active member' : 'Inactive member',
             printable: true
@@ -415,7 +446,7 @@ function pagedMemberSearch(opts) {
             filter.$or = [{ serialNumber: rx }, { name: rx }, { phone: rx }];
         }
         const _page = Math.max(1, Number(page) || 1);
-        const _limit = Math.max(1, Number(limit) || 10);
+        const _limit = Math.min(100, Math.max(1, Number(limit) || 10));
         const skip = (_page - 1) * _limit;
         const [items, total] = yield Promise.all([
             member_model_1.Member.find(filter)
@@ -567,7 +598,7 @@ function findRestaurantOffers(opts) {
         });
         /* -------------------------------- Pagination -------------------------------- */
         const pageNum = Math.max(1, Number(page) || 1);
-        const limitNum = Math.max(1, Number(limit) || 12);
+        const limitNum = Math.min(100, Math.max(1, Number(limit) || 12));
         const skip = (pageNum - 1) * limitNum;
         const paged = yield product_model_1.default.aggregate([
             {
@@ -631,7 +662,7 @@ function listDeactivationRequests(opts) {
             filter.$or = [{ serialNumber: rx }, { name: rx }, { phone: rx }];
         }
         const _page = Math.max(1, Number(page) || 1);
-        const _limit = Math.max(1, Number(limit) || 20);
+        const _limit = Math.min(100, Math.max(1, Number(limit) || 20));
         const skip = (_page - 1) * _limit;
         const [items, total] = yield Promise.all([
             member_deactivation_model_1.DeactivationRequest.find(filter).sort({ createdAt: -1 }).skip(skip).limit(_limit).lean(),
@@ -650,6 +681,25 @@ function listDeactivationRequests(opts) {
 function listMyDeactivationRequests(memberId) {
     return __awaiter(this, void 0, void 0, function* () {
         return member_deactivation_model_1.DeactivationRequest.find({ member_id: memberId }).sort({ createdAt: -1 }).lean();
+    });
+}
+function saveMemberPushToken(memberId, token) {
+    return __awaiter(this, void 0, void 0, function* () {
+        yield member_model_1.Member.findByIdAndUpdate(memberId, { expoPushToken: token });
+    });
+}
+function getScanHistory(memberId_1) {
+    return __awaiter(this, arguments, void 0, function* (memberId, page = 1, limit = 20) {
+        const skip = (page - 1) * limit;
+        const [items, total] = yield Promise.all([
+            member_scan_model_1.MemberScan.find({ member: memberId })
+                .sort({ scannedAt: -1 })
+                .skip(skip)
+                .limit(limit)
+                .lean(),
+            member_scan_model_1.MemberScan.countDocuments({ member: memberId }),
+        ]);
+        return { items, page, limit, total, hasNext: skip + items.length < total };
     });
 }
 function acceptDeactivationRequest(id, processedBy, processedNote) {

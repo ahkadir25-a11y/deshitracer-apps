@@ -47,7 +47,7 @@ const globalErrorHandler = (err, req, res, next) => {
     }
     else if (err instanceof AppError_1.default) {
         statusCode = err === null || err === void 0 ? void 0 : err.statusCode;
-        message = err === null || err === void 0 ? void 0 : err.name;
+        message = err === null || err === void 0 ? void 0 : err.message;
         errorSources = [
             {
                 path: '',
@@ -56,13 +56,18 @@ const globalErrorHandler = (err, req, res, next) => {
         ];
     }
     else if (err instanceof Error) {
-        message = err === null || err === void 0 ? void 0 : err.name;
-        errorSources = [
-            {
-                path: '',
-                message: err === null || err === void 0 ? void 0 : err.message,
-            },
-        ];
+        // Unclassified errors: never leak internal messages/stack to clients in
+        // production — log server-side, return a generic message.
+        const isDev = config_1.default.NODE_ENV === 'development';
+        if (isDev) {
+            message = err === null || err === void 0 ? void 0 : err.name;
+            errorSources = [{ path: '', message: err === null || err === void 0 ? void 0 : err.message }];
+        }
+        else {
+            console.error('[unhandled]', err === null || err === void 0 ? void 0 : err.name, err === null || err === void 0 ? void 0 : err.message);
+            message = 'Something went wrong';
+            errorSources = [{ path: '', message: 'Something went wrong' }];
+        }
     }
     // final return
     res.status(statusCode).json({

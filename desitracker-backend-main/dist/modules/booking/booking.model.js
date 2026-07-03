@@ -36,13 +36,17 @@ Object.defineProperty(exports, "__esModule", { value: true });
 const mongoose_1 = __importStar(require("mongoose"));
 // Booking Schema
 const BookingSchema = new mongoose_1.Schema({
-    ownerId: { type: mongoose_1.default.Schema.Types.ObjectId, ref: 'User', required: true },
+    ownerId: { type: mongoose_1.default.Schema.Types.ObjectId, ref: 'User', required: false },
     businessId: { type: mongoose_1.default.Schema.Types.ObjectId, ref: 'Business', required: true },
     name: { type: String, required: true },
     phone: { type: String, required: true },
+    email: { type: String, default: '', trim: true, lowercase: true },
     bookingDate: { type: Date, required: true },
     guests: { type: Number, required: true },
     specialRequests: { type: String, default: '' },
 }, { timestamps: true });
+// Index the hot query paths — booking lists are always scoped to a business and
+// ordered by date. Without this, every booking-management load is a full scan.
+BookingSchema.index({ businessId: 1, bookingDate: 1 });
 const Booking = mongoose_1.default.model('Booking', BookingSchema);
 exports.default = Booking;

@@ -6,6 +6,22 @@ Object.defineProperty(exports, "__esModule", { value: true });
 const dotenv_1 = __importDefault(require("dotenv"));
 const path_1 = __importDefault(require("path"));
 dotenv_1.default.config({ path: path_1.default.join(process.cwd(), '.env') });
+// Fail fast on missing/weak security-critical secrets instead of silently
+// booting with `undefined` (which makes JWTs forgeable or DB connect fail in
+// confusing ways). Only enforced outside of test runs.
+const requireSecret = (key) => {
+    const v = process.env[key];
+    if (!v || v.trim().length < 16) {
+        throw new Error(`[config] Missing or weak required env "${key}". Set a strong value (>=16 chars) before starting the server.`);
+    }
+    return v;
+};
+if (process.env.NODE_ENV !== 'test') {
+    requireSecret('DB_URL');
+    requireSecret('JWT_ACCESS_SECRET');
+    requireSecret('JWT_REFRESH_SECRET');
+    requireSecret('MEMBER_JWT_SECRET');
+}
 exports.default = {
     NODE_ENV: process.env.NODE_ENV,
     port: process.env.PORT,
@@ -23,7 +39,7 @@ exports.default = {
     nodemailerPass: process.env.NODEMAILER_PASS,
     companyName: process.env.COMPANY_NAME,
     rootUiURL: process.env.ROOT_UI_URL,
-    cloudinaryApiKey: process.env.CLOUDINARY_API_KAY,
+    cloudinaryApiKey: process.env.CLOUDINARY_API_KEY,
     cloudinaryApiSecret: process.env.CLOUDINARY_API_SECRET,
     cloudinaryName: process.env.CLOUDINARY_NAME,
     cloudinaryImageFolderName: process.env.IMAGE_FOLDER_NAME,

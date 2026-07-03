@@ -1,11 +1,13 @@
 import { NextFunction, Request, Response } from 'express';
 import { RotaUtils } from '../rota.utils';
 import { RotaShiftService } from './shift.service';
+import { emitToBusiness } from '../../../utils/socket';
 
 export const RotaShiftController = {
   create: async (req: Request, res: Response, next: NextFunction) => {
     try {
       const result = await RotaShiftService.create(req.body);
+      emitToBusiness(req.body?.business, 'rota_updated', { action: 'created' });
       res.status(201).json({
         success: true,
         message: 'Shift created successfully',
@@ -33,7 +35,7 @@ export const RotaShiftController = {
   getById: async (req: Request, res: Response, next: NextFunction) => {
     try {
       const business = RotaUtils.requireObjectId(req.query.business, 'business');
-      const id = RotaUtils.requireObjectId(req.params.id, 'id');
+      const id = RotaUtils.requireObjectId((req.params.id as string), 'id');
 
       const result = await RotaShiftService.getById(id, business);
       res.status(200).json({
@@ -49,9 +51,10 @@ export const RotaShiftController = {
   update: async (req: Request, res: Response, next: NextFunction) => {
     try {
       const business = RotaUtils.requireObjectId(req.query.business, 'business');
-      const id = RotaUtils.requireObjectId(req.params.id, 'id');
+      const id = RotaUtils.requireObjectId((req.params.id as string), 'id');
 
       const result = await RotaShiftService.update(id, business, req.body);
+      emitToBusiness(business, 'rota_updated', { action: 'updated' });
       res.status(200).json({
         success: true,
         message: 'Shift updated successfully',
@@ -65,9 +68,10 @@ export const RotaShiftController = {
   remove: async (req: Request, res: Response, next: NextFunction) => {
     try {
       const business = RotaUtils.requireObjectId(req.query.business, 'business');
-      const id = RotaUtils.requireObjectId(req.params.id, 'id');
+      const id = RotaUtils.requireObjectId((req.params.id as string), 'id');
 
       const result = await RotaShiftService.remove(id, business);
+      emitToBusiness(business, 'rota_updated', { action: 'removed' });
       res.status(200).json({
         success: true,
         message: 'Shift removed successfully',
@@ -76,5 +80,35 @@ export const RotaShiftController = {
     } catch (err) {
       next(err);
     }
+  },
+
+  // ── Absence cover ──────────────────────────────────────────────────────
+  requestCover: async (req: Request, res: Response, next: NextFunction) => {
+    try {
+      const business = RotaUtils.requireObjectId(req.query.business, 'business');
+      const id = RotaUtils.requireObjectId((req.params.id as string), 'id');
+      const result = await RotaShiftService.requestCover(id, business, req.body);
+      emitToBusiness(business, 'rota_updated', { action: 'cover_requested' });
+      res.status(200).json({ success: true, message: 'Cover requested', data: result });
+    } catch (err) { next(err); }
+  },
+
+  assignCover: async (req: Request, res: Response, next: NextFunction) => {
+    try {
+      const business = RotaUtils.requireObjectId(req.query.business, 'business');
+      const id = RotaUtils.requireObjectId((req.params.id as string), 'id');
+      const result = await RotaShiftService.assignCover(id, business, req.body);
+      emitToBusiness(business, 'rota_updated', { action: 'cover_assigned' });
+      res.status(200).json({ success: true, message: 'Cover assigned', data: result });
+    } catch (err) { next(err); }
+  },
+
+  availableForCover: async (req: Request, res: Response, next: NextFunction) => {
+    try {
+      const business = RotaUtils.requireObjectId(req.query.business, 'business');
+      const id = RotaUtils.requireObjectId((req.params.id as string), 'id');
+      const result = await RotaShiftService.availableForCover(id, business);
+      res.status(200).json({ success: true, message: 'Available staff resolved', data: result });
+    } catch (err) { next(err); }
   },
 };

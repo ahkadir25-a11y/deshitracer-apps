@@ -4,9 +4,9 @@ import { JwtHelpers, TJwtPayload } from '../../../utils/jwt';
 import { sendImageToCloudinary } from '../../../utils/lib/sendImageToCloudinery';
 import { sendImageToCloudinary2 } from '../../../utils/lib/uploadToSpace';
 import QueryBuilder from '../../../utils/queryBuilder';
-import removePhoneNumberIndex from './removeIndex';
 import { TChangePassword, TUser } from './user.interface';
 import { User } from './user.model';
+import { cleanupUserRelations } from '../../../utils/lib/cascadeCleanup';
 
 // Register a User
 const registerUser = async (payload: TUser, image: any) => {
@@ -14,15 +14,49 @@ const registerUser = async (payload: TUser, image: any) => {
   const { profilePic, ...remaining } = payload;
   const userData: any = { ...remaining };
 
-  if (payload?.role) {
-    userData.role = payload.role;
-    if (payload.role === 'admin') {
-      userData.userStatus = 'verified';
-    }
+  // Role policy for PUBLIC self-registration:
+  //   - 'user' (member) and 'business_owner' may self-register.
+  //   - 'staff' accounts are ONLY created via the employer's invite flow
+  //     (rota/employees/accept-invite) — never here.
+  //   - 'admin' can never be self-assigned from an unauthenticated endpoint.
+  const requestedRole = String(payload?.role || 'user');
+  if (requestedRole === 'staff') {
+    throw new AppError(
+      403,
+      'Staff accounts are created by your employer. Ask your business owner for an invite instead of registering here.',
+    );
   }
+  if (requestedRole !== 'user' && requestedRole !== 'business_owner') {
+    throw new AppError(403, 'This account type cannot be self-registered.');
+  }
+  userData.role = requestedRole;
 
   if (payload.email) {
     userData.email = payload.email.toLowerCase();
+  }
+
+  // One email = one account (and one role). Explain which kind of account the
+  // email is already tied to, instead of surfacing a raw duplicate-key error.
+  // In particular: a STAFF email can never be reused to create an owner account.
+  if (userData.email) {
+    const existing = await User.findOne({ email: userData.email });
+    if (existing && !existing.isDeleted) {
+      const roleLabel =
+        existing.role === 'business_owner' ? 'Business Owner'
+        : existing.role === 'staff' ? 'Staff'
+        : existing.role === 'admin' ? 'Admin'
+        : 'Member';
+      if (existing.role === 'staff') {
+        throw new AppError(
+          409,
+          'This email belongs to a Staff account managed by an employer, so it cannot be used to create a new account. Please use a different email address.',
+        );
+      }
+      throw new AppError(
+        409,
+        `This email is already registered as a ${roleLabel} account. Please sign in instead, or use a different email address.`,
+      );
+    }
   }
   if (image) {
     const imageName = `${userData?.email}-${new Date()}`;
@@ -31,7 +65,8 @@ const registerUser = async (payload: TUser, image: any) => {
     userData.profilePic = secure_url as string;
   }
 
-  await removePhoneNumberIndex();
+  // NOTE: the stale unique `phone_1` index (if any) is dropped once at server
+  // startup, not per-registration — see main() in server.ts.
   const result = await User.create(userData);
 
 
@@ -66,10 +101,34 @@ const getUserDetails = async (userId: string) => {
 };
 
 // Update User
-const updateUser = async (userId: string, payload: Partial<TUser>) => {
+const updateUser = async (userId: string, payload: Partial<TUser> & { currentPassword?: string }) => {
   try {
-    const userData = { ...payload, profilePic: payload?.profilePicUrl };
-    console.log(userData);
+    // Security: changing email requires the current password. Without this,
+    // a stolen session lets an attacker swap the email and take over the
+    // account via forgot-password.
+    const existing = await User.findById(userId).select('+password +email');
+    if (!existing) throw new AppError(404, 'User is not found!');
+
+    const wantsEmailChange =
+      typeof payload.email === 'string' &&
+      payload.email.toLowerCase() !== (existing.email || '').toLowerCase();
+
+    if (wantsEmailChange) {
+      const current = payload.currentPassword;
+      if (!current) {
+        throw new AppError(401, 'Current password is required to change your email.');
+      }
+      const bcrypt = await import('bcrypt');
+      const ok = await bcrypt.compare(current, (existing as any).password || '');
+      if (!ok) throw new AppError(401, 'Current password is incorrect.');
+    }
+
+    // Strip the proof so we never persist it on the user doc.
+    // Also strip `password` and `role` — password changes must go through the
+    // dedicated change-password flow (which requires oldPassword), and role
+    // must not be self-elevated via this endpoint.
+    const { currentPassword, password, role, ...rest } = payload as any;
+    const userData: any = { ...rest, profilePic: (payload as any)?.profilePicUrl };
 
     const result = await User.findByIdAndUpdate(userId, userData, {
       new: true,
@@ -82,9 +141,8 @@ const updateUser = async (userId: string, payload: Partial<TUser>) => {
 
     return result;
   } catch (error) {
-    // Handle specific errors (optional)
     console.error('Error updating user:', error);
-    throw error; // Re-throw error for upstream handling
+    throw error;
   }
 };
 
@@ -131,19 +189,45 @@ const updatePassword = async (userId: string, payload: TChangePassword) => {
   };
 };
 
-// Delete User
+// Delete User — hard delete: row is removed from the collection so the
+// email becomes available again. Old soft-delete behavior left the row
+// (with isDeleted:true) and the unique email index still blocked re-signups.
 const deleteUser = async (userId: string) => {
-  const user = await User.findByIdAndUpdate(
-    userId,
-    { isDeleted: true },
-    { new: true, runValidators: true },
-  );
+  // Make sure the user exists before we touch anything related to them.
+  const existing = await User.findById(userId);
+  if (!existing) {
+    throw new AppError(404, 'User is not found!');
+  }
+
+  // Cascade-clean what this user leaves behind: any businesses they own (and
+  // everything under those businesses) plus any staff records linked to them.
+  // This prevents orphaned Business.owner / RotaEmployee.user references.
+  await cleanupUserRelations(userId);
+
+  const user = await User.findByIdAndDelete(userId);
 
   if (!user) {
     throw new AppError(404, 'User is not found!');
   }
 
   return user;
+};
+
+// Self-service account deletion — the logged-in user deletes their OWN account.
+// Required by Apple App Store & Google Play for any self-created account.
+//
+// Staff are an exception: their account is created and managed by their
+// employer (the business owner), so they CANNOT self-delete. The owner removes
+// them from the team instead. Both stores explicitly allow this for
+// organization-managed accounts.
+const deleteOwnAccount = async (userId: string, role?: string) => {
+  if (role === 'staff') {
+    throw new AppError(
+      403,
+      'Your staff account is managed by your employer. Please contact your business owner to remove your account.',
+    );
+  }
+  return deleteUser(userId);
 };
 
 // Get Users
@@ -173,5 +257,6 @@ export const UserServices = {
   updateUser,
   updatePassword,
   deleteUser,
+  deleteOwnAccount,
   getUsers,
 };

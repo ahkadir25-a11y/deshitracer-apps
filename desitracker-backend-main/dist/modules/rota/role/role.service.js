@@ -8,6 +8,17 @@ var __awaiter = (this && this.__awaiter) || function (thisArg, _arguments, P, ge
         step((generator = generator.apply(thisArg, _arguments || [])).next());
     });
 };
+var __rest = (this && this.__rest) || function (s, e) {
+    var t = {};
+    for (var p in s) if (Object.prototype.hasOwnProperty.call(s, p) && e.indexOf(p) < 0)
+        t[p] = s[p];
+    if (s != null && typeof Object.getOwnPropertySymbols === "function")
+        for (var i = 0, p = Object.getOwnPropertySymbols(s); i < p.length; i++) {
+            if (e.indexOf(p[i]) < 0 && Object.prototype.propertyIsEnumerable.call(s, p[i]))
+                t[p[i]] = s[p[i]];
+        }
+    return t;
+};
 var __importDefault = (this && this.__importDefault) || function (mod) {
     return (mod && mod.__esModule) ? mod : { "default": mod };
 };
@@ -23,13 +34,7 @@ exports.RotaRoleService = {
             var _a, _b;
             const dto = role_validation_1.RotaRoleValidation.create(payload);
             try {
-                const doc = yield role_model_1.RotaRole.create({
-                    business: dto.business,
-                    name: dto.name,
-                    description: (_a = dto.description) !== null && _a !== void 0 ? _a : '',
-                    isActive: (_b = dto.isActive) !== null && _b !== void 0 ? _b : true,
-                    isDeleted: false,
-                });
+                const doc = yield role_model_1.RotaRole.create(Object.assign({ business: dto.business, name: dto.name, description: (_a = dto.description) !== null && _a !== void 0 ? _a : '', isActive: (_b = dto.isActive) !== null && _b !== void 0 ? _b : true, isDeleted: false }, (dto.permissions ? { permissions: dto.permissions } : {})));
                 return doc;
             }
             catch (e) {
@@ -74,8 +79,18 @@ exports.RotaRoleService = {
     update(id, business, payload) {
         return __awaiter(this, void 0, void 0, function* () {
             const dto = role_validation_1.RotaRoleValidation.update(payload);
+            // Build $set with permissions dot-notated. Without this a partial
+            // { permissions: { canViewOrders: true } } would replace the whole sub-doc
+            // and wipe the other flags.
+            const { permissions } = dto, rest = __rest(dto, ["permissions"]);
+            const setOps = Object.assign({}, rest);
+            if (permissions) {
+                for (const [k, v] of Object.entries(permissions)) {
+                    setOps[`permissions.${k}`] = v;
+                }
+            }
             try {
-                const doc = yield role_model_1.RotaRole.findOneAndUpdate({ _id: id, business, isDeleted: false }, dto, { new: true, runValidators: true });
+                const doc = yield role_model_1.RotaRole.findOneAndUpdate({ _id: id, business, isDeleted: false }, { $set: setOps }, { new: true, runValidators: true });
                 if (!doc)
                     throw new AppError_1.default(404, 'Role not found');
                 return doc;

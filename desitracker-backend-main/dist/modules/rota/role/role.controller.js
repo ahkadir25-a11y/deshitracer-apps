@@ -12,10 +12,15 @@ Object.defineProperty(exports, "__esModule", { value: true });
 exports.RotaRoleController = void 0;
 const rota_utils_1 = require("../rota.utils");
 const role_service_1 = require("./role.service");
+const socket_1 = require("../../../utils/socket");
 exports.RotaRoleController = {
     create: (req, res, next) => __awaiter(void 0, void 0, void 0, function* () {
+        var _a;
         try {
             const result = yield role_service_1.RotaRoleService.create(req.body);
+            // Tell connected clients (staff whose role this is) to re-pull their
+            // permissions so a newly-granted feature shows up without a manual reload.
+            (0, socket_1.emitToBusiness)((_a = req.body) === null || _a === void 0 ? void 0 : _a.business, 'rota_updated', { action: 'role_created' });
             res.status(201).json({
                 success: true,
                 message: 'Role created successfully',
@@ -60,6 +65,7 @@ exports.RotaRoleController = {
             const business = rota_utils_1.RotaUtils.requireObjectId(req.query.business, 'business');
             const id = rota_utils_1.RotaUtils.requireObjectId(req.params.id, 'id');
             const result = yield role_service_1.RotaRoleService.update(id, business, req.body);
+            (0, socket_1.emitToBusiness)(business, 'rota_updated', { action: 'role_updated' });
             res.status(200).json({
                 success: true,
                 message: 'Role updated successfully',
@@ -75,6 +81,7 @@ exports.RotaRoleController = {
             const business = rota_utils_1.RotaUtils.requireObjectId(req.query.business, 'business');
             const id = rota_utils_1.RotaUtils.requireObjectId(req.params.id, 'id');
             const result = yield role_service_1.RotaRoleService.remove(id, business);
+            (0, socket_1.emitToBusiness)(business, 'rota_updated', { action: 'role_removed' });
             res.status(200).json({
                 success: true,
                 message: 'Role removed successfully',

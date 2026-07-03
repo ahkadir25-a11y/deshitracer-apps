@@ -60,6 +60,7 @@ const MemberSchema = new mongoose_1.Schema({
     qrSlug: { type: String, required: true, unique: true, index: true },
     qrCodeUrl: { type: String },
     active: { type: Boolean, default: true },
+    expoPushToken: { type: String, default: null },
     deletedAt: { type: Date, default: null },
 }, { timestamps: true });
 MemberSchema.pre('save', function (next) {

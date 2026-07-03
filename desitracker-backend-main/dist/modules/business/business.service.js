@@ -13,6 +13,7 @@ var __importDefault = (this && this.__importDefault) || function (mod) {
 };
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.BusinessServices = void 0;
+const bcrypt_1 = __importDefault(require("bcrypt"));
 const mongoose_1 = require("mongoose");
 const config_1 = __importDefault(require("../../config"));
 const AppError_1 = __importDefault(require("../../errors/AppError"));
@@ -24,7 +25,7 @@ const auth_constants_1 = require("../user/auth/auth.constants");
 const user_model_1 = require("../user/user/user.model");
 const business_model_1 = require("./business.model");
 const business_template_1 = require("./business.template");
-const product_model_1 = __importDefault(require("../product/product.model"));
+const cascadeCleanup_1 = require("../../utils/lib/cascadeCleanup");
 const registerBusiness = (payload) => __awaiter(void 0, void 0, void 0, function* () {
     if (!(payload === null || payload === void 0 ? void 0 : payload.businessName)) {
         throw new AppError_1.default(400, 'Business name is required');
@@ -41,38 +42,40 @@ const registerBusiness = (payload) => __awaiter(void 0, void 0, void 0, function
     if (!result) {
         throw new AppError_1.default(500, 'failed to create Business');
     }
-    try {
-        (0, sendEmail_1.default)({
-            email: isOwner === null || isOwner === void 0 ? void 0 : isOwner.email,
-            subject: `Business Listing Approved – Desi Tracker`,
-            message: (0, business_template_1.getBusinessApprovedTemplate)(`Business Listing Approved – Desi Tracker`, result === null || result === void 0 ? void 0 : result.businessName),
-        });
-    }
-    catch (emailError) {
+    (0, sendEmail_1.default)({
+        email: isOwner === null || isOwner === void 0 ? void 0 : isOwner.email,
+        subject: `Business Listing Approved – Desi Tracker`,
+        message: (0, business_template_1.getBusinessApprovedTemplate)(`Business Listing Approved – Desi Tracker`, result === null || result === void 0 ? void 0 : result.businessName),
+    }).catch(emailError => {
         console.error('Failed to send email to owner:', emailError);
-        // Optionally: log to monitoring service, but don't throw
-    }
-    try {
-        (0, sendEmail_1.default)({
-            email: config_1.default.adminEmail,
-            subject: `Let's Welcome a new business: ${result.businessName} `,
-            message: `${result === null || result === void 0 ? void 0 : result.businessName} is registered to your application. Owner name is: ${isOwner === null || isOwner === void 0 ? void 0 : isOwner.name}`,
-        });
-    }
-    catch (emailError) {
+    });
+    (0, sendEmail_1.default)({
+        email: config_1.default.adminEmail,
+        subject: `Let's Welcome a new business: ${result.businessName} `,
+        message: `${result === null || result === void 0 ? void 0 : result.businessName} is registered to your application. Owner name is: ${isOwner === null || isOwner === void 0 ? void 0 : isOwner.name}`,
+    }).catch(emailError => {
         console.error('Failed to send email to admin:', emailError);
-        // Optionally: log to monitoring service, but don't throw
-    }
+    });
     return result;
 });
 const updateBusiness = (slug, payload, decodedUser) => __awaiter(void 0, void 0, void 0, function* () {
+    var _a, _b;
     const business = yield business_model_1.Business.findOne({ slug });
     if (!business) {
         throw new AppError_1.default(404, `Business with slug ${slug} is not found`);
     }
-    if ((decodedUser === null || decodedUser === void 0 ? void 0 : decodedUser.role) === auth_constants_1.USER_ROLE.USER &&
-        (decodedUser === null || decodedUser === void 0 ? void 0 : decodedUser.id.toString()) !== (business === null || business === void 0 ? void 0 : business.owner.toString())) {
-        throw new AppError_1.default(403, `You are not authorized to delete business with slug ${slug}.`);
+    // Authorize on ownership of THIS business (or admin). The previous check only
+    // ran for role 'user', but the route only admits ADMIN/BUSINESS_OWNER, so it
+    // was dead code — any owner could edit any other owner's business by slug.
+    const isAdmin = (decodedUser === null || decodedUser === void 0 ? void 0 : decodedUser.role) === auth_constants_1.USER_ROLE.ADMIN;
+    const isOwnerOfThis = ((_a = decodedUser === null || decodedUser === void 0 ? void 0 : decodedUser.id) === null || _a === void 0 ? void 0 : _a.toString()) === ((_b = business === null || business === void 0 ? void 0 : business.owner) === null || _b === void 0 ? void 0 : _b.toString());
+    if (!isAdmin && !isOwnerOfThis) {
+        throw new AppError_1.default(403, `You are not authorized to modify business with slug ${slug}.`);
+    }
+    // Only an admin may reassign ownership. A non-admin owner editing their own
+    // business cannot hand it (or seize someone else's) by setting a new `owner`.
+    if (!isAdmin && (payload === null || payload === void 0 ? void 0 : payload.owner) && payload.owner.toString() !== business.owner.toString()) {
+        throw new AppError_1.default(403, 'Only an admin can change the business owner.');
     }
     if (!(payload === null || payload === void 0 ? void 0 : payload.owner)) {
         throw new AppError_1.default(400, 'Business Owner is required');
@@ -280,6 +283,8 @@ const getAllBusiness = (query) => __awaiter(void 0, void 0, void 0, function* ()
         'contactDetails.email',
         'locations.address',
         'locations.exactBusinessLocation', // Make sure this is included
+        'locations.city',
+        'locations.country',
         'description',
     ])
         .filter()
@@ -296,7 +301,8 @@ const getAllBusiness = (query) => __awaiter(void 0, void 0, void 0, function* ()
 });
 const getSingleBusiness = (slug, req) => __awaiter(void 0, void 0, void 0, function* () {
     var _a;
-    const result = yield business_model_1.Business.findOne({ slug }).populate([
+    const query = mongoose_1.Types.ObjectId.isValid(slug) ? { $or: [{ _id: slug }, { slug }] } : { slug };
+    const result = yield business_model_1.Business.findOne(query).populate([
         { path: 'owner', model: 'User' },
         { path: 'category', model: 'Category' },
         { path: 'subCategory', model: 'Subcategory' },
@@ -308,22 +314,23 @@ const getSingleBusiness = (slug, req) => __awaiter(void 0, void 0, void 0, funct
     return result;
 });
 const deleteBusiness = (slug, decodedUser) => __awaiter(void 0, void 0, void 0, function* () {
+    var _a, _b;
     const business = yield business_model_1.Business.findOne({ slug });
     if (!business) {
         throw new AppError_1.default(404, `Business with slug ${slug} is not found`);
     }
-    if ((decodedUser === null || decodedUser === void 0 ? void 0 : decodedUser.role) === auth_constants_1.USER_ROLE.USER &&
-        (decodedUser === null || decodedUser === void 0 ? void 0 : decodedUser.id.toString()) !== (business === null || business === void 0 ? void 0 : business.owner.toString())) {
+    // Only the owner of THIS business (or an admin) may delete it. An owner can
+    // delete their own business if they leave the platform — but cannot delete
+    // anyone else's. (Was previously gated on role 'user', which never matched.)
+    const isAdmin = (decodedUser === null || decodedUser === void 0 ? void 0 : decodedUser.role) === auth_constants_1.USER_ROLE.ADMIN;
+    const isOwnerOfThis = ((_a = decodedUser === null || decodedUser === void 0 ? void 0 : decodedUser.id) === null || _a === void 0 ? void 0 : _a.toString()) === ((_b = business === null || business === void 0 ? void 0 : business.owner) === null || _b === void 0 ? void 0 : _b.toString());
+    if (!isAdmin && !isOwnerOfThis) {
         throw new AppError_1.default(403, `You are not authorized to delete the business with slug ${slug}.`);
     }
-    // Delete products associated with the business
-    const deletedProducts = yield product_model_1.default.deleteMany({ business_id: business._id });
-    if (deletedProducts.deletedCount > 0) {
-        console.log(`Successfully deleted ${deletedProducts.deletedCount} products.`);
-    }
-    else {
-        console.log('No products found for this business to delete.');
-    }
+    // Cascade-clean every record tied to this business (staff, orders, bookings,
+    // reviews, shifts, inventory, etc.) so nothing is left pointing at a deleted
+    // business. Auto-discovers all related collections — see cascadeCleanup.ts.
+    yield (0, cascadeCleanup_1.cleanupBusinessRelations)(business._id);
     // Delete the business
     const result = yield business_model_1.Business.findByIdAndUpdate(business._id, { isDeleted: true }, { new: true, runValidators: true });
     if (!result) {
@@ -352,7 +359,7 @@ const getAllBusinessListings = (query) => __awaiter(void 0, void 0, void 0, func
     addFilterIfValid('businessName', query === null || query === void 0 ? void 0 : query.businessName);
     addFilterIfValid('owner', (query === null || query === void 0 ? void 0 : query.owner) ? new mongoose_1.Types.ObjectId(query === null || query === void 0 ? void 0 : query.owner) : undefined);
     addFilterIfValid('slug', query === null || query === void 0 ? void 0 : query.slug);
-    addFilterIfValid('category', (query === null || query === void 0 ? void 0 : query.categoryId)
+    addFilterIfValid('category', (query === null || query === void 0 ? void 0 : query.category)
         ? new mongoose_1.Types.ObjectId(query === null || query === void 0 ? void 0 : query.category)
         : undefined);
     addFilterIfValid('subCategory', (query === null || query === void 0 ? void 0 : query.subCategory)
@@ -407,6 +414,32 @@ const getAllBusinessListings = (query) => __awaiter(void 0, void 0, void 0, func
         result,
     };
 });
+const setManagerPin = (businessId, pin) => __awaiter(void 0, void 0, void 0, function* () {
+    const raw = (pin || '').trim();
+    if (!/^\d{4,8}$/.test(raw)) {
+        throw new AppError_1.default(400, 'PIN must be 4-8 digits');
+    }
+    const hashed = yield bcrypt_1.default.hash(raw, 10);
+    const updated = yield business_model_1.Business.findByIdAndUpdate(businessId, { managerPin: hashed }, { new: true });
+    if (!updated)
+        throw new AppError_1.default(404, 'Business not found');
+    return { ok: true };
+});
+const verifyManagerPin = (businessId, pin) => __awaiter(void 0, void 0, void 0, function* () {
+    const raw = (pin || '').trim();
+    if (!raw)
+        throw new AppError_1.default(400, 'PIN is required');
+    const biz = yield business_model_1.Business.findById(businessId).select('+managerPin');
+    if (!biz)
+        throw new AppError_1.default(404, 'Business not found');
+    if (!biz.managerPin) {
+        throw new AppError_1.default(400, 'Manager PIN not configured for this business');
+    }
+    const ok = yield bcrypt_1.default.compare(raw, biz.managerPin);
+    if (!ok)
+        throw new AppError_1.default(401, 'Incorrect PIN');
+    return { ok: true };
+});
 exports.BusinessServices = {
     registerBusiness,
     updateBusiness,
@@ -414,4 +447,6 @@ exports.BusinessServices = {
     getSingleBusiness,
     deleteBusiness,
     getAllBusinessListings,
+    setManagerPin,
+    verifyManagerPin,
 };

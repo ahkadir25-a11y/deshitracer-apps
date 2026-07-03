@@ -1,3 +1,4 @@
+import bcrypt from 'bcrypt';
 import { Request } from 'express';
 import { JwtPayload } from 'jsonwebtoken';
 import { Types } from 'mongoose';
@@ -12,7 +13,7 @@ import { User } from '../user/user/user.model';
 import { TBusiness } from './business.interface';
 import { Business } from './business.model';
 import { getBusinessApprovedTemplate } from './business.template';
-import Product from '../product/product.model';
+import { cleanupBusinessRelations } from '../../utils/lib/cascadeCleanup';
 
 const registerBusiness = async (payload: TBusiness) => {
   if (!payload?.businessName) {
@@ -37,7 +38,6 @@ const registerBusiness = async (payload: TBusiness) => {
     throw new AppError(500, 'failed to create Business');
   }
 
-  try {
     sendEmail({
       email: isOwner?.email,
       subject: `Business Listing Approved – Desi Tracker`,
@@ -45,22 +45,17 @@ const registerBusiness = async (payload: TBusiness) => {
         `Business Listing Approved – Desi Tracker`,
         result?.businessName,
       ),
+    }).catch(emailError => {
+      console.error('Failed to send email to owner:', emailError);
     });
-  } catch (emailError) {
-    console.error('Failed to send email to owner:', emailError);
-    // Optionally: log to monitoring service, but don't throw
-  }
 
-  try {
     sendEmail({
       email: config.adminEmail,
       subject: `Let's Welcome a new business: ${result.businessName} `,
       message: `${result?.businessName} is registered to your application. Owner name is: ${isOwner?.name}`,
+    }).catch(emailError => {
+      console.error('Failed to send email to admin:', emailError);
     });
-  } catch (emailError) {
-    console.error('Failed to send email to admin:', emailError);
-    // Optionally: log to monitoring service, but don't throw
-  }
 
   return result;
 };
@@ -75,14 +70,23 @@ const updateBusiness = async (
     throw new AppError(404, `Business with slug ${slug} is not found`);
   }
 
-  if (
-    decodedUser?.role === USER_ROLE.USER &&
-    decodedUser?.id.toString() !== business?.owner.toString()
-  ) {
+  // Authorize on ownership of THIS business (or admin). The previous check only
+  // ran for role 'user', but the route only admits ADMIN/BUSINESS_OWNER, so it
+  // was dead code — any owner could edit any other owner's business by slug.
+  const isAdmin = decodedUser?.role === USER_ROLE.ADMIN;
+  const isOwnerOfThis =
+    decodedUser?.id?.toString() === business?.owner?.toString();
+  if (!isAdmin && !isOwnerOfThis) {
     throw new AppError(
       403,
-      `You are not authorized to delete business with slug ${slug}.`,
+      `You are not authorized to modify business with slug ${slug}.`,
     );
+  }
+
+  // Only an admin may reassign ownership. A non-admin owner editing their own
+  // business cannot hand it (or seize someone else's) by setting a new `owner`.
+  if (!isAdmin && payload?.owner && payload.owner.toString() !== business.owner.toString()) {
+    throw new AppError(403, 'Only an admin can change the business owner.');
   }
 
   if (!payload?.owner) {
@@ -315,6 +319,8 @@ const getAllBusiness = async (query: Record<string, unknown>) => {
       'contactDetails.email',
       'locations.address',
       'locations.exactBusinessLocation', // Make sure this is included
+      'locations.city',
+      'locations.country',
       'description',
     ])
     .filter()
@@ -333,7 +339,8 @@ const getAllBusiness = async (query: Record<string, unknown>) => {
 };
 
 const getSingleBusiness = async (slug: string, req: Request) => {
-  const result = await Business.findOne({ slug }).populate([
+  const query = Types.ObjectId.isValid(slug) ? { $or: [{ _id: slug }, { slug }] } : { slug };
+  const result = await Business.findOne(query).populate([
     { path: 'owner', model: 'User' },
     { path: 'category', model: 'Category' },
     { path: 'subCategory', model: 'Subcategory' },
@@ -354,23 +361,23 @@ const deleteBusiness = async (slug: string, decodedUser: JwtPayload) => {
     throw new AppError(404, `Business with slug ${slug} is not found`);
   }
 
-  if (
-    decodedUser?.role === USER_ROLE.USER &&
-    decodedUser?.id.toString() !== business?.owner.toString()
-  ) {
+  // Only the owner of THIS business (or an admin) may delete it. An owner can
+  // delete their own business if they leave the platform — but cannot delete
+  // anyone else's. (Was previously gated on role 'user', which never matched.)
+  const isAdmin = decodedUser?.role === USER_ROLE.ADMIN;
+  const isOwnerOfThis =
+    decodedUser?.id?.toString() === business?.owner?.toString();
+  if (!isAdmin && !isOwnerOfThis) {
     throw new AppError(
       403,
       `You are not authorized to delete the business with slug ${slug}.`,
     );
   }
 
-  // Delete products associated with the business
-  const deletedProducts = await Product.deleteMany({ business_id: business._id });
-  if (deletedProducts.deletedCount > 0) {
-    console.log(`Successfully deleted ${deletedProducts.deletedCount} products.`);
-  } else {
-    console.log('No products found for this business to delete.');
-  }
+  // Cascade-clean every record tied to this business (staff, orders, bookings,
+  // reviews, shifts, inventory, etc.) so nothing is left pointing at a deleted
+  // business. Auto-discovers all related collections — see cascadeCleanup.ts.
+  await cleanupBusinessRelations(business._id);
 
   // Delete the business
   const result = await Business.findByIdAndUpdate(
@@ -417,7 +424,7 @@ const getAllBusinessListings = async (query: Record<string, unknown>) => {
   addFilterIfValid('slug', query?.slug);
   addFilterIfValid(
     'category',
-    query?.categoryId
+    query?.category
       ? new Types.ObjectId(query?.category as string)
       : undefined,
   );
@@ -516,6 +523,34 @@ const getAllBusinessListings = async (query: Record<string, unknown>) => {
   };
 };
 
+const setManagerPin = async (businessId: string, pin: string) => {
+  const raw = (pin || '').trim();
+  if (!/^\d{4,8}$/.test(raw)) {
+    throw new AppError(400, 'PIN must be 4-8 digits');
+  }
+  const hashed = await bcrypt.hash(raw, 10);
+  const updated = await Business.findByIdAndUpdate(
+    businessId,
+    { managerPin: hashed },
+    { new: true }
+  );
+  if (!updated) throw new AppError(404, 'Business not found');
+  return { ok: true };
+};
+
+const verifyManagerPin = async (businessId: string, pin: string) => {
+  const raw = (pin || '').trim();
+  if (!raw) throw new AppError(400, 'PIN is required');
+  const biz = await Business.findById(businessId).select('+managerPin');
+  if (!biz) throw new AppError(404, 'Business not found');
+  if (!biz.managerPin) {
+    throw new AppError(400, 'Manager PIN not configured for this business');
+  }
+  const ok = await bcrypt.compare(raw, biz.managerPin);
+  if (!ok) throw new AppError(401, 'Incorrect PIN');
+  return { ok: true };
+};
+
 export const BusinessServices = {
   registerBusiness,
   updateBusiness,
@@ -523,4 +558,6 @@ export const BusinessServices = {
   getSingleBusiness,
   deleteBusiness,
   getAllBusinessListings,
+  setManagerPin,
+  verifyManagerPin,
 };

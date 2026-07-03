@@ -49,7 +49,7 @@ const getSingleBanner = (0, handleAsyncRequest_1.default)((req, res) => __awaite
 // Update a banner
 // const updateBanner = handleAsyncRequest(async (req: Request, res: Response) => {
 //   const result = await BannerServices.updateBanner(
-//     req.params.id,
+//     (req.params.id as string),
 //     req.body,
 //     req.file,
 //   );

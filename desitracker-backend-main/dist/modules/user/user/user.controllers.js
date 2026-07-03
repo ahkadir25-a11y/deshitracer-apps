@@ -1,4 +1,37 @@
 "use strict";
+var __createBinding = (this && this.__createBinding) || (Object.create ? (function(o, m, k, k2) {
+    if (k2 === undefined) k2 = k;
+    var desc = Object.getOwnPropertyDescriptor(m, k);
+    if (!desc || ("get" in desc ? !m.__esModule : desc.writable || desc.configurable)) {
+      desc = { enumerable: true, get: function() { return m[k]; } };
+    }
+    Object.defineProperty(o, k2, desc);
+}) : (function(o, m, k, k2) {
+    if (k2 === undefined) k2 = k;
+    o[k2] = m[k];
+}));
+var __setModuleDefault = (this && this.__setModuleDefault) || (Object.create ? (function(o, v) {
+    Object.defineProperty(o, "default", { enumerable: true, value: v });
+}) : function(o, v) {
+    o["default"] = v;
+});
+var __importStar = (this && this.__importStar) || (function () {
+    var ownKeys = function(o) {
+        ownKeys = Object.getOwnPropertyNames || function (o) {
+            var ar = [];
+            for (var k in o) if (Object.prototype.hasOwnProperty.call(o, k)) ar[ar.length] = k;
+            return ar;
+        };
+        return ownKeys(o);
+    };
+    return function (mod) {
+        if (mod && mod.__esModule) return mod;
+        var result = {};
+        if (mod != null) for (var k = ownKeys(mod), i = 0; i < k.length; i++) if (k[i] !== "default") __createBinding(result, mod, k[i]);
+        __setModuleDefault(result, mod);
+        return result;
+    };
+})();
 var __awaiter = (this && this.__awaiter) || function (thisArg, _arguments, P, generator) {
     function adopt(value) { return value instanceof P ? value : new P(function (resolve) { resolve(value); }); }
     return new (P || (P = Promise))(function (resolve, reject) {
@@ -52,7 +85,14 @@ const getMe = (0, handleAsyncRequest_1.default)((req, res) => __awaiter(void 0, 
 }));
 // Update User
 const updateUser = (0, handleAsyncRequest_1.default)((req, res) => __awaiter(void 0, void 0, void 0, function* () {
+    var _a, _b;
     const userId = req.params.id;
+    // Authorization: a user can only update their own record. Admins may
+    // update anyone (still no password/role through this route — stripped
+    // in the service).
+    if (((_a = req.user) === null || _a === void 0 ? void 0 : _a.role) !== 'admin' && String((_b = req.user) === null || _b === void 0 ? void 0 : _b.id) !== String(userId)) {
+        throw new AppError_1.default(403, 'You can only update your own account.');
+    }
     // 💡 Safe parse if needed
     let payload = req.body;
     // Check if body has 'data' field (as in your POST route)
@@ -95,6 +135,17 @@ const deleteUser = (0, handleAsyncRequest_1.default)((req, res) => __awaiter(voi
         data: result,
     });
 }));
+// Delete own account (self-service). Owners/members can; staff cannot.
+const deleteMe = (0, handleAsyncRequest_1.default)((req, res) => __awaiter(void 0, void 0, void 0, function* () {
+    var _a, _b;
+    const result = yield user_services_1.UserServices.deleteOwnAccount((_a = req.user) === null || _a === void 0 ? void 0 : _a.id, (_b = req.user) === null || _b === void 0 ? void 0 : _b.role);
+    (0, sendResponse_1.default)(res, {
+        success: true,
+        statusCode: 200,
+        message: 'Your account has been deleted successfully.',
+        data: result,
+    });
+}));
 // Get Users
 const getUsers = (0, handleAsyncRequest_1.default)((req, res) => __awaiter(void 0, void 0, void 0, function* () {
     const result = yield user_services_1.UserServices.getUsers(req.query);
@@ -106,12 +157,25 @@ const getUsers = (0, handleAsyncRequest_1.default)((req, res) => __awaiter(void 
         data: result.result,
     });
 }));
+const savePushToken = (0, handleAsyncRequest_1.default)((req, res) => __awaiter(void 0, void 0, void 0, function* () {
+    const user = req.user;
+    if (!(user === null || user === void 0 ? void 0 : user.id))
+        throw new AppError_1.default(401, 'Not authenticated');
+    const { token } = req.body;
+    if (!token || typeof token !== 'string')
+        throw new AppError_1.default(400, 'token is required');
+    const { User } = yield Promise.resolve().then(() => __importStar(require('./user.model')));
+    yield User.findByIdAndUpdate(user.id, { expoPushToken: token });
+    (0, sendResponse_1.default)(res, { success: true, statusCode: 200, message: 'Push token saved', data: null });
+}));
 exports.UserControllers = {
     registerUser,
     getUserDetails,
     updateUser,
     updatePassword,
     deleteUser,
+    deleteMe,
     getUsers,
     getMe,
+    savePushToken,
 };

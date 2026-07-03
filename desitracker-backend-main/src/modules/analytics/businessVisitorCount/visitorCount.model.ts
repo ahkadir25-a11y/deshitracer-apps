@@ -9,10 +9,6 @@ const VisitorCountSchema: Schema = new Schema<TVisitorCount>(
       ref: 'Business',
       required: true,
     },
-    member: {
-      type: mongoose.Schema.Types.ObjectId,
-      ref: 'Member',
-    },
     ipAddress: { type: String },
   },
   { timestamps: true },

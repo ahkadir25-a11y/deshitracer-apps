@@ -64,6 +64,7 @@ interface IProduct extends Document {
   name: string;
   price: number;
   description: string;
+  tags?: string[];
   images: { url: string; description: string }[];
   thumbnail: string;
   user_id: mongoose.Schema.Types.ObjectId;
@@ -84,6 +85,7 @@ const productSchema: Schema = new Schema(
     name: { type: String, required: true },
     price: { type: Number, required: true, min: 0 },
     description: { type: String, required: true },
+    tags: { type: [String], default: [] },
     images: [
       {
         url: { type: String, required: true },
@@ -92,7 +94,7 @@ const productSchema: Schema = new Schema(
     ],
     thumbnail: { type: String },
     user_id: { type: mongoose.Schema.Types.ObjectId, ref: 'User', required: true },
-    business_id: { type: mongoose.Schema.Types.ObjectId, ref: 'Business', required: true },
+    business_id: { type: mongoose.Schema.Types.ObjectId, ref: 'Business', required: true, index: true },
     currency: { type: String, required: true, default: 'USD' },
     product_category_id: { type: mongoose.Schema.Types.ObjectId, ref: 'ProductCategory' },
 

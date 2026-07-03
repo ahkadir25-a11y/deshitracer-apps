@@ -15,7 +15,7 @@ const FridgeRecordSchema = new Schema(
 const FridgeSchema = new Schema<IFridge>({
     fridgeName: { type: String, required: true },
     fridgeLocation: { type: String, required: true },
-    userId: { type: String, required: true, ref: 'User' },  // Reference to user (assuming a User model exists)
+    userId: { type: String, required: true, ref: 'User', index: true },  // Reference to user (assuming a User model exists)
     temperatureRecords: [FridgeRecordSchema]
 });
 

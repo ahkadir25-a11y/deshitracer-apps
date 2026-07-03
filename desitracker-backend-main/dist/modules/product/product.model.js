@@ -89,6 +89,7 @@ const productSchema = new mongoose_1.Schema({
     name: { type: String, required: true },
     price: { type: Number, required: true, min: 0 },
     description: { type: String, required: true },
+    tags: { type: [String], default: [] },
     images: [
         {
             url: { type: String, required: true },
@@ -97,7 +98,7 @@ const productSchema = new mongoose_1.Schema({
     ],
     thumbnail: { type: String },
     user_id: { type: mongoose_1.default.Schema.Types.ObjectId, ref: 'User', required: true },
-    business_id: { type: mongoose_1.default.Schema.Types.ObjectId, ref: 'Business', required: true },
+    business_id: { type: mongoose_1.default.Schema.Types.ObjectId, ref: 'Business', required: true, index: true },
     currency: { type: String, required: true, default: 'USD' },
     product_category_id: { type: mongoose_1.default.Schema.Types.ObjectId, ref: 'ProductCategory' },
     discount_percent: { type: Number, min: 0, max: 100, default: 0 },

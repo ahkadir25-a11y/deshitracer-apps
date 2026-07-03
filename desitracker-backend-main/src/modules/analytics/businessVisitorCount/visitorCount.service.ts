@@ -11,25 +11,14 @@ const addToVisitorCount = async (businessId: string, req: Request) => {
   const business = await Business.findById(businessId);
   if (!business) throw new AppError(404, 'Business not found!');
 
-  const { memberSlug } = req.body;
-  let memberId = null;
-
-  if (memberSlug) {
-    const member = await mongoose.model('Member').findOne({ qrSlug: memberSlug });
-    if (member) {
-      memberId = member._id;
-    }
-  }
-
   // Ensure correct IP detection
   const ipAddress = (req.headers['x-forwarded-for'] as string)?.split(',')[0]?.trim() || req.socket.remoteAddress || req.ip;
 
-  const oneMinuteAgo = new Date(Date.now() - 60 * 1000);
+  const cooldownTime = new Date(Date.now() - 30 * 1000);
   const recentVisit = await VisitorCount.findOne({
     business: businessId,
-    member: memberId || { $exists: false },
-    ipAddress: memberId ? null : ipAddress, // If member identified, IP is less critical for deduping
-    createdAt: { $gte: oneMinuteAgo },
+    ipAddress: ipAddress,
+    createdAt: { $gte: cooldownTime },
   });
 
   if (recentVisit) {
@@ -38,7 +27,6 @@ const addToVisitorCount = async (businessId: string, req: Request) => {
 
   return await VisitorCount.create({
     business: businessId,
-    member: memberId,
     ipAddress: ipAddress,
   });
 };
@@ -289,16 +277,8 @@ const getAdminAnalytics = async (queries: Record<string, unknown>) => {
   };
 };
 
-const getMemberVisitHistory = async (memberId: string) => {
-  return await VisitorCount.find({ member: memberId })
-    .populate('business', 'businessName logo locations')
-    .sort({ createdAt: -1 })
-    .limit(50);
-};
-
 export const VisitorCountServices = {
   addToVisitorCount,
   getBusinessAnalytics,
   getAdminAnalytics,
-  getMemberVisitHistory,
 };

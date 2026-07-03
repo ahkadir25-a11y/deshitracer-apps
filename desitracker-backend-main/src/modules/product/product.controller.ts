@@ -52,6 +52,7 @@ const addProduct = async (req: Request, res: Response) => {
       product_category_id,
       price,
       description,
+      tags,
       images,
       thumbnail,
       user_id,
@@ -74,6 +75,7 @@ const addProduct = async (req: Request, res: Response) => {
       name,
       price,
       description,
+      tags: Array.isArray(tags) ? tags : [],
       images,
       thumbnail,
       user_id,
@@ -181,7 +183,7 @@ const getProductById = async (req: Request, res: Response) => {
 const getProductsByCategory = async (req: Request, res: Response) => {
   try {
     const { categoryId } = req.params; // e.g. /products/category/:categoryId
-    const { user_id, business_id } = req.query as {
+    const { user_id, business_id } = (req.query as any) as {
       user_id?: string;
       business_id?: string;
     };
@@ -316,7 +318,7 @@ const createDayOffer = async (req: Request, res: Response): Promise<void> => {
 // List
 const listDayOffers = async (req: Request, res: Response): Promise<void> => {
   try {
-    const { user_id, business_id, city, country } = req.query as {
+    const { user_id, business_id, city, country } = (req.query as any) as {
       user_id?: string; business_id?: string; city?: string; country?: string;
     };
 
@@ -330,7 +332,7 @@ const listDayOffers = async (req: Request, res: Response): Promise<void> => {
 // Get by id
 const getDayOffer = async (req: Request, res: Response): Promise<void> => {
   try {
-    const one = await productService.getDayOfferById(req.params.id);
+    const one = await productService.getDayOfferById((req.params.id as string));
     if (!one) { res.status(404).json({ error: 'Day offer not found' }); return; }
     res.status(200).json(one);
   } catch (err: any) {
@@ -366,7 +368,7 @@ const updateDayOffer = async (req: Request, res: Response): Promise<void> => {
       updates.product_category_id = req.body.product_category_id || undefined;
     }
 
-    const updated = await productService.updateDayOffer(req.params.id, updates);
+    const updated = await productService.updateDayOffer((req.params.id as string), updates);
     if (!updated) { res.status(404).json({ error: 'Day offer not found' }); return; }
     res.status(200).json(updated);
   } catch (err: any) {
@@ -378,7 +380,7 @@ const updateDayOffer = async (req: Request, res: Response): Promise<void> => {
 // Delete
 const deleteDayOffer = async (req: Request, res: Response): Promise<void> => {
   try {
-    const result = await productService.deleteDayOffer(req.params.id);
+    const result = await productService.deleteDayOffer((req.params.id as string));
     res.status(200).json(result);
   } catch (err: any) {
     res.status(500).json({ error: err?.message || 'Failed to delete day offer' });
@@ -418,7 +420,7 @@ const applyDayOfferToday = async (req: Request, res: Response): Promise<void> =>
 // Get most recent active offer for today
 const getActiveTodayDayOffer = async (req: Request, res: Response): Promise<void> => {
   try {
-    const { business_id, user_id, product_category_id, day } = req.query as {
+    const { business_id, user_id, product_category_id, day } = (req.query as any) as {
       business_id?: string;
       user_id?: string;
       product_category_id?: string;
