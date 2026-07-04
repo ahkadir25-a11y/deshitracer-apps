@@ -293,10 +293,19 @@ export const RotaShiftService = {
       excludeId: id,
     });
 
-    // ─── NEW: Overtime protection also applies when editing shifts ───────────────
-    // Without this, the owner could extend a shift from 8h to 16h
-    // and the overtime check would never fire.
-    if (nextEmployee) {
+    // ─── Overtime protection also applies when editing shifts ────────────────────
+    // Guards against silently extending a shift (e.g. 8h → 16h) past the weekly cap.
+    // BUT skip it when:
+    //   • the shift times aren't changing (only toggling a flag / location / notes),
+    //     otherwise flipping the "OT On" switch re-runs the guard and blocks itself; or
+    //   • the owner is mandating overtime (ownerMandatedOvertime === true) — that IS
+    //     the explicit authorization to exceed the normal weekly limit.
+    const timesChanged = dto.startAt !== undefined || dto.endAt !== undefined;
+    const nextOvertime =
+      dto.ownerMandatedOvertime !== undefined
+        ? dto.ownerMandatedOvertime
+        : existing.ownerMandatedOvertime;
+    if (nextEmployee && timesChanged && nextOvertime !== true) {
       await ensureNoOvertimeRisk({
         business,
         employee: nextEmployee,
