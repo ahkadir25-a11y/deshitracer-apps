@@ -11,7 +11,11 @@ router.post(
   auth(USER_ROLE.ADMIN),
   upload.single('file'),
   (req: Request, res: Response, next: NextFunction) => {
-    req.body = JSON.parse(req.body.data);
+    try {
+      req.body = JSON.parse(req.body.data);
+    } catch {
+      return res.status(400).json({ message: 'Invalid JSON in request body' });
+    }
     next();
   },
   SliderControllers.createSlider,

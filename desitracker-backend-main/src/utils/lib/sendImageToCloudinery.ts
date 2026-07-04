@@ -23,15 +23,17 @@ export const sendImageToCloudinary = (
         folder: folderName || config.cloudinaryImageFolderName,
       },
       function (error, result) {
-        if (error) {
-          reject(error);
-        }
-        resolve(result as UploadApiResponse);
+        // Always clean up the temp file; log (don't reject) if cleanup fails,
+        // since the promise may already be settled by then.
         fs.unlink(path, (err) => {
           if (err) {
-            reject(err);
+            console.error('Failed to delete local file:', err);
           }
         });
+        if (error) {
+          return reject(error);
+        }
+        resolve(result as UploadApiResponse);
       },
     );
   });

@@ -41,7 +41,7 @@ const sendEmail = async (options: any) => {
     return result?.messageId;
   } catch (error: any) {
     console.error(`Failed to send email to ${options.email}: ${error?.message}`);
-    throw new Error('Failed to send email');
+    throw new Error(`Failed to send email: ${error?.message || error}`);
   }
 };
 

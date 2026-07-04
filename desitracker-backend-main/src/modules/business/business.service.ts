@@ -252,7 +252,7 @@ const getAllBusiness = async (query: Record<string, unknown>) => {
     newQuery.isActive = query.isActive === 'true'; // Correctly convert 'true' string to boolean true
   }
 
-  if (query?.isHalal !== undefined) newQuery.isHalal = query.isHalal;
+  if (query?.isHalal !== undefined) newQuery.isHalal = query.isHalal === 'true';
   if (query?.howToHearAboutDesiTracker)
     newQuery.howToHearAboutDesiTracker = query.howToHearAboutDesiTracker;
 
@@ -266,9 +266,11 @@ const getAllBusiness = async (query: Record<string, unknown>) => {
   if (query?.foodOptions)
     newQuery['features.foodOptions'] = query.foodOptions;
   if (query?.offerSpecialDiscount !== undefined)
-    newQuery['features.offerSpecialDiscount'] = query.offerSpecialDiscount;
+    newQuery['features.offerSpecialDiscount'] =
+      query.offerSpecialDiscount === 'true';
   if (query?.isWheelChairAccessible !== undefined)
-    newQuery['features.isWheelChairAccessible'] = query.isWheelChairAccessible;
+    newQuery['features.isWheelChairAccessible'] =
+      query.isWheelChairAccessible === 'true';
 
   // Contact details
   if (query?.phoneNumber)
@@ -278,19 +280,19 @@ const getAllBusiness = async (query: Record<string, unknown>) => {
   // Operation details
   if (query?.provideHomeDelivery !== undefined)
     newQuery['operationDetails.provideHomeDelivery'] =
-      query.provideHomeDelivery;
+      query.provideHomeDelivery === 'true';
   if (query?.provideOnlineService !== undefined)
     newQuery['operationDetails.provideOnlineService'] =
-      query.provideOnlineService;
+      query.provideOnlineService === 'true';
   if (query?.offerInStorePickup !== undefined)
     newQuery['operationDetails.offerInStorePickup'] =
-      query.offerInStorePickup;
+      query.offerInStorePickup === 'true';
   if (query?.isParkingAvailable !== undefined)
     newQuery['operationDetails.isParkingAvailable'] =
-      query.isParkingAvailable;
+      query.isParkingAvailable === 'true';
   if (query?.offerOnlineBooking !== undefined)
     newQuery['operationDetails.offerOnlineBooking'] =
-      query.offerOnlineBooking;
+      query.offerOnlineBooking === 'true';
   if (query?.onlineBookingLink)
     newQuery['operationDetails.onlineBookingLink'] =
       query.onlineBookingLink;

@@ -30,7 +30,8 @@ export const requireMemberAuth: RequestHandler = (req: Request, res: Response, n
     // Ensure secret is typed as jwt.Secret
     const secret = config.memberJwtSecret as unknown as Secret;
     payload = jwt.verify(token, secret) as MemberJwtPayload;
-  } catch {
+  } catch (err) {
+    console.error('[memberAuth] Token verification failed:', err);
     res.status(401).json({ message: 'Invalid or expired token' });
     return;
   }
