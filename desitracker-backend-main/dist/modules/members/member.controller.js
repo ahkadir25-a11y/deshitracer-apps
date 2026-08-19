@@ -103,6 +103,7 @@ const meController = (req, res) => __awaiter(void 0, void 0, void 0, function* (
     res.json({
         id: m._id, name: m.name, phone: m.phone, city: m.city,
         profileImageUrl: m.profileImageUrl,
+        coverPhotoUrl: m.coverPhotoUrl,
         serialNumber: m === null || m === void 0 ? void 0 : m.serialNumber, qrCodeUrl: m.qrCodeUrl,
         info: `Deshi Tracker active member with serial number ${m === null || m === void 0 ? void 0 : m.serialNumber}`,
         active: m.active,
@@ -116,10 +117,19 @@ const meController = (req, res) => __awaiter(void 0, void 0, void 0, function* (
 });
 exports.meController = meController;
 const updateMeController = (req, res) => __awaiter(void 0, void 0, void 0, function* () {
-    const m = yield memberService.updateMember(req.member.id, {
-        name: req.body.name, phone: req.body.phone, city: req.body.city
+    var _a;
+    // Only copy keys the client actually sent, so a partial PATCH (e.g. just a
+    // new cover photo) doesn't blank out the other fields.
+    const updates = {};
+    for (const key of ['name', 'phone', 'city', 'profileImageUrl', 'coverPhotoUrl']) {
+        if (((_a = req.body) === null || _a === void 0 ? void 0 : _a[key]) !== undefined)
+            updates[key] = req.body[key];
+    }
+    const m = yield memberService.updateMember(req.member.id, updates);
+    res.json({
+        id: m === null || m === void 0 ? void 0 : m._id, name: m === null || m === void 0 ? void 0 : m.name, phone: m === null || m === void 0 ? void 0 : m.phone, city: m === null || m === void 0 ? void 0 : m.city,
+        profileImageUrl: m === null || m === void 0 ? void 0 : m.profileImageUrl, coverPhotoUrl: m === null || m === void 0 ? void 0 : m.coverPhotoUrl,
     });
-    res.json({ id: m === null || m === void 0 ? void 0 : m._id, name: m === null || m === void 0 ? void 0 : m.name, phone: m === null || m === void 0 ? void 0 : m.phone, city: m === null || m === void 0 ? void 0 : m.city });
 });
 exports.updateMeController = updateMeController;
 const uploadProfileImageController = (req, res) => __awaiter(void 0, void 0, void 0, function* () {

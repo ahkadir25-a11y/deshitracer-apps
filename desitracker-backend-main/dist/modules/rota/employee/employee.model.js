@@ -43,6 +43,7 @@ const rotaEmployeeSchema = new mongoose_1.Schema({
     holidayAllowance: { type: Number, min: 0, default: 28 },
     // Profile photo (Cloudinary URL or equivalent).
     photoUrl: { type: String, default: null },
+    coverPhotoUrl: { type: String, default: null },
     // Used for birthday reminders on the owner's rota view.
     dateOfBirth: { type: Date, default: null },
     // Whether this employee is allowed to start overtime

@@ -16,6 +16,7 @@ router.post('/accept-invite', employee_controller_1.RotaEmployeeController.accep
 router.get('/me/permissions', (0, auth_1.default)('business_owner', 'admin', 'staff', 'user'), employee_controller_1.RotaEmployeeController.getMyPermissions);
 // Staff saves their Expo push token after granting notification permission.
 router.put('/me/push-token', (0, auth_1.default)('staff', 'business_owner', 'admin', 'user'), employee_controller_1.RotaEmployeeController.savePushToken);
+router.patch('/me/photos', (0, auth_1.default)('staff', 'business_owner', 'admin', 'user'), employee_controller_1.RotaEmployeeController.updateMyPhotos);
 // Employee management — restricted to business owners and admins.
 router.post('/', (0, auth_1.default)('business_owner', 'admin'), employee_controller_1.RotaEmployeeController.create);
 // Staff may LIST colleagues (needed to render the rota with names), but they

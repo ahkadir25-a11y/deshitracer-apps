@@ -70,5 +70,6 @@ export interface IRotaEmployee {
   updatedAt: Date;
   holidayAllowance?: number;
   photoUrl?: string | null;
+  coverPhotoUrl?: string | null;
   dateOfBirth?: Date | null;
 }

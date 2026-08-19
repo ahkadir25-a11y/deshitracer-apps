@@ -114,6 +114,7 @@ export type TBusiness = {
   established?: Date;
   about?: string;
   logo: string;
+  coverPhotoUrl?: string;
   contactDetails: TContactDetails;
   locations: TLocation;
   operationDetails: TOperationDetails;

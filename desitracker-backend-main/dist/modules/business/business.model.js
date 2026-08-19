@@ -128,6 +128,9 @@ const BusinessSchema = new mongoose_1.Schema({
     established: { type: Date },
     about: { type: String },
     logo: { type: String },
+    // Dedicated cover/banner. Optional: businesses created before this field
+    // keep falling back to their gallery images on the details screen.
+    coverPhotoUrl: { type: String },
     contactDetails: { type: ContactDetailsSchema, required: true },
     locations: { type: LocationSchema, required: true },
     operationDetails: { type: OperationDetailsSchema, required: true },

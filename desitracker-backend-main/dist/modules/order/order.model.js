@@ -17,6 +17,7 @@ const OrderItemSchema = new mongoose_1.Schema({
     product_category_id: { type: mongoose_1.Types.ObjectId, ref: "ProductCategory" },
     product_category_type: { type: String },
     selectedOptions: { type: [OrderItemOptionSchema], default: [] },
+    note: { type: String, default: "" },
     // Item-level KDS tracking
     // Flow: NOT_SENT → SENT_TO_KITCHEN → PREPARING → READY → DONE → SERVED.
     // DONE = kitchen finished (food on the pass); SERVED = waiter delivered it

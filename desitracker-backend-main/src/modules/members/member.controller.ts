@@ -54,6 +54,7 @@ export const meController: RequestHandler = async (req, res): Promise<void> => {
   res.json({
     id: m._id, name: m.name, phone: m.phone, city: m.city,
     profileImageUrl: m.profileImageUrl,
+    coverPhotoUrl: m.coverPhotoUrl,
     serialNumber: m?.serialNumber, qrCodeUrl: m.qrCodeUrl,
     info: `Deshi Tracker active member with serial number ${m?.serialNumber}`,
     active: m.active,
@@ -67,10 +68,17 @@ export const meController: RequestHandler = async (req, res): Promise<void> => {
 };
 
 export const updateMeController: RequestHandler = async (req, res): Promise<void> => {
-  const m = await memberService.updateMember((req as MemberAuthRequest).member!.id, {
-    name: req.body.name, phone: req.body.phone, city: req.body.city
+  // Only copy keys the client actually sent, so a partial PATCH (e.g. just a
+  // new cover photo) doesn't blank out the other fields.
+  const updates: Record<string, unknown> = {};
+  for (const key of ['name', 'phone', 'city', 'profileImageUrl', 'coverPhotoUrl']) {
+    if (req.body?.[key] !== undefined) updates[key] = req.body[key];
+  }
+  const m = await memberService.updateMember((req as MemberAuthRequest).member!.id, updates);
+  res.json({
+    id: m?._id, name: m?.name, phone: m?.phone, city: m?.city,
+    profileImageUrl: m?.profileImageUrl, coverPhotoUrl: m?.coverPhotoUrl,
   });
-  res.json({ id: m?._id, name: m?.name, phone: m?.phone, city: m?.city });
 };
 
 export const uploadProfileImageController: RequestHandler = async (req, res): Promise<void> => {

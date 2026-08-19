@@ -75,6 +75,7 @@ exports.RotaEmployeeController = {
                     firstName: e.firstName,
                     lastName: e.lastName,
                     photoUrl: e.photoUrl,
+                    coverPhotoUrl: e.coverPhotoUrl,
                     status: e.status,
                     role: e.role,
                     user: e.user,
@@ -166,6 +167,42 @@ exports.RotaEmployeeController = {
                 success: true,
                 message: 'Permissions resolved',
                 data: result,
+            });
+        }
+        catch (err) {
+            next(err);
+        }
+    }),
+    // Staff updating their OWN photos. Deliberately narrow: only the two image
+    // URLs are writable here, so this can never be used to self-edit pay, role
+    // or permissions. Mirrors savePushToken's lookup.
+    updateMyPhotos: (req, res, next) => __awaiter(void 0, void 0, void 0, function* () {
+        try {
+            const user = req.user;
+            if (!(user === null || user === void 0 ? void 0 : user.id)) {
+                res.status(401).json({ success: false, message: 'Not authenticated' });
+                return;
+            }
+            const business = rota_utils_1.RotaUtils.requireObjectId(req.query.business, 'business');
+            const { photoUrl, coverPhotoUrl } = req.body || {};
+            const updates = {};
+            if (photoUrl !== undefined)
+                updates.photoUrl = photoUrl || null;
+            if (coverPhotoUrl !== undefined)
+                updates.coverPhotoUrl = coverPhotoUrl || null;
+            if (!Object.keys(updates).length) {
+                res.status(400).json({ success: false, message: 'Provide photoUrl or coverPhotoUrl' });
+                return;
+            }
+            const emp = yield (yield Promise.resolve().then(() => __importStar(require('./employee.model')))).RotaEmployee.findOneAndUpdate({ user: user.id, business, isDeleted: false }, updates, { new: true });
+            if (!emp) {
+                res.status(404).json({ success: false, message: 'Employee record not found' });
+                return;
+            }
+            res.status(200).json({
+                success: true,
+                message: 'Photos updated',
+                data: { photoUrl: emp.photoUrl, coverPhotoUrl: emp.coverPhotoUrl },
             });
         }
         catch (err) {

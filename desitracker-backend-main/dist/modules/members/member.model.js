@@ -56,6 +56,7 @@ const MemberSchema = new mongoose_1.Schema({
     password: { type: String, required: true, select: false },
     city: { type: String },
     profileImageUrl: { type: String },
+    coverPhotoUrl: { type: String },
     serialNumber: { type: String, required: true, unique: true, index: true },
     qrSlug: { type: String, required: true, unique: true, index: true },
     qrCodeUrl: { type: String },

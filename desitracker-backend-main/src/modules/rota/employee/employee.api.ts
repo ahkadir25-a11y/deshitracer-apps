@@ -14,6 +14,7 @@ router.get('/me/permissions', auth('business_owner', 'admin', 'staff', 'user'), 
 
 // Staff saves their Expo push token after granting notification permission.
 router.put('/me/push-token', auth('staff', 'business_owner', 'admin', 'user'), RotaEmployeeController.savePushToken);
+router.patch('/me/photos', auth('staff', 'business_owner', 'admin', 'user'), RotaEmployeeController.updateMyPhotos);
 
 // Employee management — restricted to business owners and admins.
 router.post('/', auth('business_owner', 'admin'), RotaEmployeeController.create);

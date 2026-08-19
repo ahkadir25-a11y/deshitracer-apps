@@ -411,7 +411,7 @@ export async function changeMemberPassword(
 
 export function updateMember(
   id: string,
-  updates: Partial<Pick<IMember, 'name' | 'phone' | 'city'>>
+  updates: Partial<Pick<IMember, 'name' | 'phone' | 'city' | 'profileImageUrl' | 'coverPhotoUrl'>>
 ) {
   return Member.findByIdAndUpdate(id, { $set: updates }, { new: true });
 }

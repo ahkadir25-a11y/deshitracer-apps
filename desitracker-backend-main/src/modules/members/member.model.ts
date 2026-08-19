@@ -9,6 +9,7 @@ export interface IMember extends Document {
   password: string;
   city?: string;
   profileImageUrl?: string;
+  coverPhotoUrl?: string;
   serialNumber: string;
   qrSlug: string;
   qrCodeUrl?: string;
@@ -30,6 +31,7 @@ const MemberSchema = new Schema<IMember>(
     password: { type: String, required: true, select: false },
     city: { type: String },
     profileImageUrl: { type: String },
+    coverPhotoUrl: { type: String },
 
     serialNumber: { type: String, required: true, unique: true, index: true },
     qrSlug: { type: String, required: true, unique: true, index: true },
