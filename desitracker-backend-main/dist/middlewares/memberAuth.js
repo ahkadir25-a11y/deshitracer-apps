@@ -19,7 +19,8 @@ const requireMemberAuth = (req, res, next) => {
         const secret = config_1.config.memberJwtSecret;
         payload = jsonwebtoken_1.default.verify(token, secret);
     }
-    catch (_a) {
+    catch (err) {
+        console.error('[memberAuth] Token verification failed:', err);
         res.status(401).json({ message: 'Invalid or expired token' });
         return;
     }

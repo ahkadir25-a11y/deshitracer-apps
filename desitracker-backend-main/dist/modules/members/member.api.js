@@ -23,6 +23,8 @@ exports.MemberRoutes.put('/me/push-token', memberAuth_1.requireMemberAuth, membe
 exports.MemberRoutes.get('/me/scan-history', memberAuth_1.requireMemberAuth, member_controller_1.getScanHistoryController);
 exports.MemberRoutes.post('/upload-profile-image', memberAuth_1.requireMemberAuth, sendImageToCloudinery_1.upload.single('image'), member_controller_1.uploadProfileImageController);
 exports.MemberRoutes.patch('/me/status', memberAuth_1.requireMemberAuth, member_controller_1.setStatusController);
+exports.MemberRoutes.patch('/me/notification-prefs', memberAuth_1.requireMemberAuth, member_controller_1.updateNotificationPrefsController);
+exports.MemberRoutes.put('/me/change-password', memberAuth_1.requireMemberAuth, member_controller_1.changePasswordController);
 exports.MemberRoutes.delete('/me', memberAuth_1.requireMemberAuth, member_controller_1.deleteMeController);
 // Returns member PII (name + phone), so it is locked to authenticated business
 // users — same as /search. The only caller (OwnerMembersScreen) is a logged-in

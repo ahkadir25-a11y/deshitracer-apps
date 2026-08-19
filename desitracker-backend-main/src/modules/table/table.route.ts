@@ -16,6 +16,12 @@ router.get(
   TableControllers.getBusinessTables
 );
 
+router.patch(
+  '/:id',
+  auth('business_owner', 'admin'),
+  TableControllers.updateTable
+);
+
 router.delete(
   '/:id',
   auth('business_owner', 'admin'),

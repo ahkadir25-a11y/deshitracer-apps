@@ -11,7 +11,12 @@ const auth_constants_1 = require("../../user/auth/auth.constants");
 const slider_controllers_1 = require("./slider.controllers");
 const router = (0, express_1.Router)();
 router.post('/create', (0, auth_1.default)(auth_constants_1.USER_ROLE.ADMIN), sendImageToCloudinery_1.upload.single('file'), (req, res, next) => {
-    req.body = JSON.parse(req.body.data);
+    try {
+        req.body = JSON.parse(req.body.data);
+    }
+    catch (_a) {
+        return res.status(400).json({ message: 'Invalid JSON in request body' });
+    }
     next();
 }, slider_controllers_1.SliderControllers.createSlider);
 router.get('/all', slider_controllers_1.SliderControllers.getAllSliders);

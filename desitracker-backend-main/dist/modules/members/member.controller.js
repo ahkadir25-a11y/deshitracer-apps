@@ -45,7 +45,7 @@ var __importDefault = (this && this.__importDefault) || function (mod) {
     return (mod && mod.__esModule) ? mod : { "default": mod };
 };
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.sendPromotionToLeadsController = exports.listMyLeadsController = exports.removeLeadController = exports.addLeadController = exports.acceptDeactivationRequestController = exports.listDeactivationRequestsController = exports.myDeactivationRequestsController = exports.createDeactivationRequestController = exports.getRestaurantOffersController = exports.setStatusBySerialController = exports.pagedSearchMembersController = exports.searchBySerialController = exports.lookupBySerialController = exports.verifyBySlugController = exports.getScanHistoryController = exports.savePushTokenController = exports.deleteMeController = exports.setStatusController = exports.uploadProfileImageController = exports.updateMeController = exports.meController = exports.loginController = exports.registerController = void 0;
+exports.sendPromotionToLeadsController = exports.listMyLeadsController = exports.removeLeadController = exports.addLeadController = exports.acceptDeactivationRequestController = exports.listDeactivationRequestsController = exports.myDeactivationRequestsController = exports.createDeactivationRequestController = exports.getRestaurantOffersController = exports.setStatusBySerialController = exports.pagedSearchMembersController = exports.searchBySerialController = exports.lookupBySerialController = exports.verifyBySlugController = exports.getScanHistoryController = exports.savePushTokenController = exports.deleteMeController = exports.updateNotificationPrefsController = exports.changePasswordController = exports.setStatusController = exports.uploadProfileImageController = exports.updateMeController = exports.meController = exports.loginController = exports.registerController = void 0;
 const memberService = __importStar(require("./member.service"));
 const jsonwebtoken_1 = __importDefault(require("jsonwebtoken"));
 const config_1 = require("../../middlewares/config");
@@ -94,6 +94,7 @@ const loginController = (req, res) => __awaiter(void 0, void 0, void 0, function
 exports.loginController = loginController;
 // ---------- Authenticated (must be RequestHandler + no return res...) ----------
 const meController = (req, res) => __awaiter(void 0, void 0, void 0, function* () {
+    var _a, _b;
     const m = yield memberService.getMemberById(req.member.id);
     if (!m) {
         res.status(404).json({ message: 'Not found' });
@@ -104,7 +105,13 @@ const meController = (req, res) => __awaiter(void 0, void 0, void 0, function* (
         profileImageUrl: m.profileImageUrl,
         serialNumber: m === null || m === void 0 ? void 0 : m.serialNumber, qrCodeUrl: m.qrCodeUrl,
         info: `Deshi Tracker active member with serial number ${m === null || m === void 0 ? void 0 : m.serialNumber}`,
-        active: m.active
+        active: m.active,
+        // Defaults mirror the schema so the toggles render correctly for members
+        // created before this field existed.
+        notificationPrefs: {
+            newOffers: ((_a = m.notificationPrefs) === null || _a === void 0 ? void 0 : _a.newOffers) !== false,
+            promotionalEmails: ((_b = m.notificationPrefs) === null || _b === void 0 ? void 0 : _b.promotionalEmails) !== false,
+        },
     });
 });
 exports.meController = meController;
@@ -135,6 +142,37 @@ const setStatusController = (req, res) => __awaiter(void 0, void 0, void 0, func
     res.json({ active: updated === null || updated === void 0 ? void 0 : updated.active });
 });
 exports.setStatusController = setStatusController;
+const changePasswordController = (req, res) => __awaiter(void 0, void 0, void 0, function* () {
+    const { oldPassword, newPassword } = req.body || {};
+    if (!oldPassword || !newPassword) {
+        res.status(400).json({ message: 'Both "oldPassword" and "newPassword" are required.' });
+        return;
+    }
+    if (typeof newPassword !== 'string' || newPassword.length < 6) {
+        res.status(400).json({ message: 'New password must be at least 6 characters.' });
+        return;
+    }
+    try {
+        yield memberService.changeMemberPassword(req.member.id, oldPassword, newPassword);
+        res.json({ message: 'Password changed successfully.' });
+    }
+    catch (err) {
+        // A wrong current password is the user's mistake, not a server fault — 400,
+        // so it doesn't get reported as a crash.
+        res.status(400).json({ message: err.message || 'Could not change password.' });
+    }
+});
+exports.changePasswordController = changePasswordController;
+const updateNotificationPrefsController = (req, res) => __awaiter(void 0, void 0, void 0, function* () {
+    const { newOffers, promotionalEmails } = req.body || {};
+    if (typeof newOffers !== 'boolean' && typeof promotionalEmails !== 'boolean') {
+        res.status(400).json({ message: 'Provide at least one boolean preference.' });
+        return;
+    }
+    const prefs = yield memberService.updateNotificationPrefs(req.member.id, { newOffers, promotionalEmails });
+    res.json({ notificationPrefs: prefs });
+});
+exports.updateNotificationPrefsController = updateNotificationPrefsController;
 const deleteMeController = (req, res) => __awaiter(void 0, void 0, void 0, function* () {
     yield memberService.deleteMember(req.member.id);
     res.json({ message: 'Account deleted and all data removed.' });

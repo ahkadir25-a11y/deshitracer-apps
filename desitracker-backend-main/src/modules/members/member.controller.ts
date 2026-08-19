@@ -56,7 +56,13 @@ export const meController: RequestHandler = async (req, res): Promise<void> => {
     profileImageUrl: m.profileImageUrl,
     serialNumber: m?.serialNumber, qrCodeUrl: m.qrCodeUrl,
     info: `Deshi Tracker active member with serial number ${m?.serialNumber}`,
-    active: m.active
+    active: m.active,
+    // Defaults mirror the schema so the toggles render correctly for members
+    // created before this field existed.
+    notificationPrefs: {
+      newOffers: m.notificationPrefs?.newOffers !== false,
+      promotionalEmails: m.notificationPrefs?.promotionalEmails !== false,
+    },
   });
 };
 
@@ -81,6 +87,43 @@ export const uploadProfileImageController: RequestHandler = async (req, res): Pr
 export const setStatusController: RequestHandler = async (req, res): Promise<void> => {
   const updated = await memberService.setActiveStatus((req as MemberAuthRequest).member!.id, req.body.active);
   res.json({ active: updated?.active });
+};
+
+export const changePasswordController: RequestHandler = async (req, res): Promise<void> => {
+  const { oldPassword, newPassword } = req.body || {};
+  if (!oldPassword || !newPassword) {
+    res.status(400).json({ message: 'Both "oldPassword" and "newPassword" are required.' });
+    return;
+  }
+  if (typeof newPassword !== 'string' || newPassword.length < 6) {
+    res.status(400).json({ message: 'New password must be at least 6 characters.' });
+    return;
+  }
+  try {
+    await memberService.changeMemberPassword(
+      (req as MemberAuthRequest).member!.id,
+      oldPassword,
+      newPassword
+    );
+    res.json({ message: 'Password changed successfully.' });
+  } catch (err) {
+    // A wrong current password is the user's mistake, not a server fault — 400,
+    // so it doesn't get reported as a crash.
+    res.status(400).json({ message: (err as Error).message || 'Could not change password.' });
+  }
+};
+
+export const updateNotificationPrefsController: RequestHandler = async (req, res): Promise<void> => {
+  const { newOffers, promotionalEmails } = req.body || {};
+  if (typeof newOffers !== 'boolean' && typeof promotionalEmails !== 'boolean') {
+    res.status(400).json({ message: 'Provide at least one boolean preference.' });
+    return;
+  }
+  const prefs = await memberService.updateNotificationPrefs(
+    (req as MemberAuthRequest).member!.id,
+    { newOffers, promotionalEmails }
+  );
+  res.json({ notificationPrefs: prefs });
 };
 
 export const deleteMeController: RequestHandler = async (req, res): Promise<void> => {

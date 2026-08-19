@@ -43,9 +43,13 @@ const auth = (...requiredRoles) => {
         if ((user === null || user === void 0 ? void 0 : user.userStatus) === 'suspicious') {
             throw new AppError_1.default(http_status_1.default.FORBIDDEN, 'This user is blocked');
         }
-        //   // check if the user is authorized for this task/operation
+        //   // check if the user is authorized for this task/operation.
+        // Use 403 FORBIDDEN, not 401: the caller IS authenticated (valid token) —
+        // they just lack the role for this route. Returning 401 here made the app
+        // treat a role wall as an expired session and log the user out (staff got
+        // bounced to login). 403 keeps the session alive.
         if (requiredRoles && !requiredRoles.includes(role)) {
-            throw new AppError_1.default(http_status_1.default.UNAUTHORIZED, 'Authorization error.');
+            throw new AppError_1.default(http_status_1.default.FORBIDDEN, 'Authorization error.');
         }
         // add decoded data to global req.user
         req.user = decodedUser;

@@ -31,7 +31,9 @@ const AllUsers = () => {
     searchTerm,
     sort: JSON.stringify({ name: "asc" }),
   });
-  const pageNation = usersData?.meta;
+  // Defensively extract pagination meta
+  const pageNation = usersData?.meta || usersData?.data?.meta || {};
+  
   const handlePageChange = (page: number) => {
     serPage(page);
   };
@@ -40,10 +42,18 @@ const AllUsers = () => {
     setLimit(newLimit);
     serPage(1);
   };
+  
   if (usersLoading) {
     return <TableLoader />;
   }
-  if (!usersData) {
+  
+  // Defensively extract users array
+  const usersArray = usersData?.data?.users || usersData?.users || usersData?.data?.data || usersData?.data;
+  const safeUsers = Array.isArray(usersArray) 
+    ? usersArray 
+    : Object.values(usersData?.data || usersData || {}).find(val => Array.isArray(val)) || [];
+
+  if (!usersData || (!usersLoading && safeUsers.length === 0)) {
     return (
       <div className="w-full h-full flex justify-center items-center">
         No Data Found
@@ -66,7 +76,7 @@ const AllUsers = () => {
       </section>
       <section className="h-full w-full flex flex-col gap-y-0.5 overflow-auto space-y-2">
         <UsersTable
-          users={usersData?.data}
+          users={safeUsers}
           visibleColumns={visibleColumns}
           sorting={sort}
           setSorting={setSort}
@@ -79,7 +89,7 @@ const AllUsers = () => {
           <TotalEntries total={pageNation?.total || 0} />
           <Pagination
             currentPage={page}
-            totalPages={pageNation?.totalPage}
+            totalPages={pageNation?.totalPage || 1}
             onPageChange={handlePageChange}
           />
         </div>

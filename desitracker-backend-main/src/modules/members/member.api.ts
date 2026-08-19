@@ -7,6 +7,8 @@ import {
   uploadProfileImageController,
   setStatusController,
   deleteMeController,
+  changePasswordController,
+  updateNotificationPrefsController,
   verifyBySlugController,
   lookupBySerialController,
   searchBySerialController,
@@ -49,6 +51,8 @@ MemberRoutes.post(
   uploadProfileImageController
 );
 MemberRoutes.patch('/me/status', requireMemberAuth, setStatusController);
+MemberRoutes.patch('/me/notification-prefs', requireMemberAuth, updateNotificationPrefsController);
+MemberRoutes.put('/me/change-password', requireMemberAuth, changePasswordController);
 MemberRoutes.delete('/me', requireMemberAuth, deleteMeController);
 // Returns member PII (name + phone), so it is locked to authenticated business
 // users — same as /search. The only caller (OwnerMembersScreen) is a logged-in

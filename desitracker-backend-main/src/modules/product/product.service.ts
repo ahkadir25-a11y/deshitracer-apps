@@ -203,7 +203,14 @@ async function notifyMembersNewOffer(businessId: string, discountPercent: number
   const business = await Business.findById(businessId).select('businessName').lean();
   const name = (business as any)?.businessName || 'A business';
 
-  const members = await Member.find({ active: true, expoPushToken: { $ne: null }, deletedAt: null })
+  // Respect the member's newOffers preference. `$ne: false` rather than
+  // `true` so members created before this field existed still get offers.
+  const members = await Member.find({
+    active: true,
+    expoPushToken: { $ne: null },
+    deletedAt: null,
+    'notificationPrefs.newOffers': { $ne: false },
+  })
     .select('expoPushToken')
     .lean();
 

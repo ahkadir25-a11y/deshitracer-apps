@@ -47,7 +47,10 @@ app.use((0, cors_1.default)({
             callback(null, true);
         }
         else {
-            callback(new Error('Not allowed by CORS'));
+            // Reject the request without throwing — an Error here becomes an
+            // unhandled rejection that crashes the whole process (server.ts
+            // shuts the server down on any unhandledRejection/uncaughtException).
+            callback(null, false);
         }
     },
     credentials: true,

@@ -101,7 +101,7 @@ export async function sendPromotionToLeads(opts: {
 
   // 2) Load leads (lead members)
   const leads = await MemberLead.find({ owner_member_id: ownerMemberId })
-    .populate("lead_member_id", "name email deletedAt")
+    .populate("lead_member_id", "name email deletedAt notificationPrefs")
     .lean();
 
   const leadMembers = leads
@@ -111,10 +111,15 @@ export async function sendPromotionToLeads(opts: {
 
   const totalLeads = leadMembers.length;
 
-  // 3) Filter recipients with email
-  const recipients = leadMembers.filter((m: any) => typeof m.email === "string" && m.email.trim());
+  // 3) Filter recipients with email, and honour their promotional-email
+  // preference (!== false so members predating the field still receive them).
+  const withEmail = leadMembers.filter((m: any) => typeof m.email === "string" && m.email.trim());
+  const recipients = withEmail.filter(
+    (m: any) => m.notificationPrefs?.promotionalEmails !== false
+  );
 
-  const skippedNoEmail = totalLeads - recipients.length;
+  const skippedNoEmail = totalLeads - withEmail.length;
+  const skippedOptedOut = withEmail.length - recipients.length;
 
   const emailSubject = subject?.trim() || `🎉 ${businessName} - Special Offer`;
   const start = prettyDate(offer.start_date);
@@ -160,6 +165,7 @@ export async function sendPromotionToLeads(opts: {
     sent,
     failed,
     skippedNoEmail,
+    skippedOptedOut,
   };
 }
 
@@ -386,6 +392,21 @@ export async function authenticateMember(phone: string, password: string): Promi
 
 export function getMemberById(id: string) {
   return Member.findById(id);
+}
+
+export async function changeMemberPassword(
+  id: string,
+  oldPassword: string,
+  newPassword: string
+): Promise<void> {
+  const m = await Member.findOne({ _id: id, deletedAt: null }).select('+password');
+  if (!m) throw new Error('Member not found');
+  const ok = await bcrypt.compare(oldPassword, m.password);
+  if (!ok) throw new Error('Current password is incorrect');
+  // Assign rather than $set: the pre-save hook is what hashes the password,
+  // and findByIdAndUpdate would skip it and store plaintext.
+  m.password = newPassword;
+  await m.save();
 }
 
 export function updateMember(
@@ -769,6 +790,21 @@ export async function listDeactivationRequests(opts: {
 
 export async function listMyDeactivationRequests(memberId: string) {
   return DeactivationRequest.find({ member_id: memberId }).sort({ createdAt: -1 }).lean();
+}
+
+export async function updateNotificationPrefs(
+  memberId: string,
+  prefs: { newOffers?: boolean; promotionalEmails?: boolean }
+) {
+  const $set: Record<string, boolean> = {};
+  if (typeof prefs.newOffers === 'boolean') $set['notificationPrefs.newOffers'] = prefs.newOffers;
+  if (typeof prefs.promotionalEmails === 'boolean') {
+    $set['notificationPrefs.promotionalEmails'] = prefs.promotionalEmails;
+  }
+  const m = await Member.findByIdAndUpdate(memberId, { $set }, { new: true })
+    .select('notificationPrefs')
+    .lean();
+  return (m as any)?.notificationPrefs;
 }
 
 export async function saveMemberPushToken(memberId: string, token: string) {

@@ -10,5 +10,6 @@ const auth_1 = __importDefault(require("../../middlewares/auth")); // Ensure thi
 const router = express_1.default.Router();
 router.post('/create', (0, auth_1.default)('business_owner', 'staff', 'admin'), table_controller_1.TableControllers.createTable);
 router.get('/business/:businessId', (0, auth_1.default)('business_owner', 'staff', 'admin'), table_controller_1.TableControllers.getBusinessTables);
+router.patch('/:id', (0, auth_1.default)('business_owner', 'admin'), table_controller_1.TableControllers.updateTable);
 router.delete('/:id', (0, auth_1.default)('business_owner', 'admin'), table_controller_1.TableControllers.deleteTable);
 exports.TableRoutes = router;

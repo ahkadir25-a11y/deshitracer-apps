@@ -17,9 +17,12 @@ const handleAsyncRequest_1 = __importDefault(require("../../utils/handleAsyncReq
 const sendResponse_1 = __importDefault(require("../../utils/sendResponse"));
 const table_service_1 = require("./table.service");
 const createTable = (0, handleAsyncRequest_1.default)((req, res) => __awaiter(void 0, void 0, void 0, function* () {
-    var _a;
-    const business_id = ((_a = req.user) === null || _a === void 0 ? void 0 : _a.business_id) || req.body.business_id; // Depend on your auth structure
-    const result = yield table_service_1.TableServices.createTable(business_id, req.body);
+    var _a, _b, _c;
+    const business_id = req.body.business_id || ((_a = req.user) === null || _a === void 0 ? void 0 : _a.business_id);
+    const result = yield table_service_1.TableServices.createTable(business_id, req.body, {
+        id: (_b = req.user) === null || _b === void 0 ? void 0 : _b.id,
+        role: (_c = req.user) === null || _c === void 0 ? void 0 : _c.role,
+    });
     (0, sendResponse_1.default)(res, {
         statusCode: 201,
         success: true,
@@ -37,10 +40,21 @@ const getBusinessTables = (0, handleAsyncRequest_1.default)((req, res) => __awai
         data: result,
     });
 }));
+const updateTable = (0, handleAsyncRequest_1.default)((req, res) => __awaiter(void 0, void 0, void 0, function* () {
+    var _a, _b, _c, _d;
+    const result = yield table_service_1.TableServices.updateTable((_a = req.user) === null || _a === void 0 ? void 0 : _a.id, (_b = req.user) === null || _b === void 0 ? void 0 : _b.role, req.params.id, { tableNo: (_c = req.body) === null || _c === void 0 ? void 0 : _c.tableNo, capacity: (_d = req.body) === null || _d === void 0 ? void 0 : _d.capacity });
+    (0, sendResponse_1.default)(res, {
+        statusCode: 200,
+        success: true,
+        message: 'Table updated successfully',
+        data: result,
+    });
+}));
 const deleteTable = (0, handleAsyncRequest_1.default)((req, res) => __awaiter(void 0, void 0, void 0, function* () {
-    var _a;
-    const business_id = ((_a = req.user) === null || _a === void 0 ? void 0 : _a.business_id) || req.body.business_id; // Or extract from decoded token properly
-    const result = yield table_service_1.TableServices.deleteTable(business_id, req.params.id);
+    var _a, _b;
+    // Ownership is resolved from the table's own business_id inside the service
+    // — the JWT does not carry business_id.
+    const result = yield table_service_1.TableServices.deleteTable((_a = req.user) === null || _a === void 0 ? void 0 : _a.id, (_b = req.user) === null || _b === void 0 ? void 0 : _b.role, req.params.id);
     (0, sendResponse_1.default)(res, {
         statusCode: 200,
         success: true,
@@ -51,5 +65,6 @@ const deleteTable = (0, handleAsyncRequest_1.default)((req, res) => __awaiter(vo
 exports.TableControllers = {
     createTable,
     getBusinessTables,
+    updateTable,
     deleteTable,
 };

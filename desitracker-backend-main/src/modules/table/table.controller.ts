@@ -4,8 +4,11 @@ import sendResponse from '../../utils/sendResponse';
 import { TableServices } from './table.service';
 
 const createTable = catchAsync(async (req: Request, res: Response) => {
-  const business_id = req.user?.business_id || req.body.business_id; // Depend on your auth structure
-  const result = await TableServices.createTable(business_id, req.body);
+  const business_id = req.body.business_id || req.user?.business_id;
+  const result = await TableServices.createTable(business_id, req.body, {
+    id: req.user?.id as string,
+    role: req.user?.role as string,
+  });
 
   sendResponse(res, {
     statusCode: 201,
@@ -27,9 +30,30 @@ const getBusinessTables = catchAsync(async (req: Request, res: Response) => {
   });
 });
 
+const updateTable = catchAsync(async (req: Request, res: Response) => {
+  const result = await TableServices.updateTable(
+    req.user?.id as string,
+    req.user?.role as string,
+    req.params.id as string,
+    { tableNo: req.body?.tableNo, capacity: req.body?.capacity },
+  );
+
+  sendResponse(res, {
+    statusCode: 200,
+    success: true,
+    message: 'Table updated successfully',
+    data: result,
+  });
+});
+
 const deleteTable = catchAsync(async (req: Request, res: Response) => {
-  const business_id = req.user?.business_id || req.body.business_id; // Or extract from decoded token properly
-  const result = await TableServices.deleteTable(business_id, (req.params.id as string));
+  // Ownership is resolved from the table's own business_id inside the service
+  // — the JWT does not carry business_id.
+  const result = await TableServices.deleteTable(
+    req.user?.id as string,
+    req.user?.role as string,
+    req.params.id as string,
+  );
 
   sendResponse(res, {
     statusCode: 200,
@@ -42,5 +66,6 @@ const deleteTable = catchAsync(async (req: Request, res: Response) => {
 export const TableControllers = {
   createTable,
   getBusinessTables,
+  updateTable,
   deleteTable,
 };

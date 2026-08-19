@@ -49,9 +49,13 @@ const auth = (...requiredRoles: TUserRole[]) => {
         throw new AppError(httpStatus.FORBIDDEN, 'This user is blocked');
       }
 
-      //   // check if the user is authorized for this task/operation
+      //   // check if the user is authorized for this task/operation.
+      // Use 403 FORBIDDEN, not 401: the caller IS authenticated (valid token) —
+      // they just lack the role for this route. Returning 401 here made the app
+      // treat a role wall as an expired session and log the user out (staff got
+      // bounced to login). 403 keeps the session alive.
       if (requiredRoles && !requiredRoles.includes(role)) {
-        throw new AppError(httpStatus.UNAUTHORIZED, 'Authorization error.');
+        throw new AppError(httpStatus.FORBIDDEN, 'Authorization error.');
       }
 
       // add decoded data to global req.user

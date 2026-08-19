@@ -166,7 +166,14 @@ function notifyMembersNewOffer(businessId, discountPercent, day) {
     return __awaiter(this, void 0, void 0, function* () {
         const business = yield business_model_1.Business.findById(businessId).select('businessName').lean();
         const name = (business === null || business === void 0 ? void 0 : business.businessName) || 'A business';
-        const members = yield member_model_1.Member.find({ active: true, expoPushToken: { $ne: null }, deletedAt: null })
+        // Respect the member's newOffers preference. `$ne: false` rather than
+        // `true` so members created before this field existed still get offers.
+        const members = yield member_model_1.Member.find({
+            active: true,
+            expoPushToken: { $ne: null },
+            deletedAt: null,
+            'notificationPrefs.newOffers': { $ne: false },
+        })
             .select('expoPushToken')
             .lean();
         const tokens = members.map((m) => m.expoPushToken).filter(Boolean);

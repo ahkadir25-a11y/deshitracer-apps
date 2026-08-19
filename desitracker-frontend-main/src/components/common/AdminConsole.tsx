@@ -90,6 +90,9 @@ function MembersTab() {
   const { data, isFetching, refetch } = usePagedMembersQuery({ q, page, limit });
   const [setBySerial, { isLoading: toggling }] = useSetMemberStatusBySerialMutation();
 
+  const membersArray = data?.data?.members || data?.members || data?.data?.items || data?.items || data?.data?.data || data?.data || data;
+  const safeMembers = Array.isArray(membersArray) ? membersArray : (Object.values(data?.data || data || {}).find(val => Array.isArray(val)) || []);
+
   return (
     <section className="space-y-4">
       <Card>
@@ -153,7 +156,7 @@ function MembersTab() {
               </tr>
             </thead>
             <tbody>
-              {data?.items?.map((m) => (
+              {safeMembers.map((m: any) => (
                 <tr
                   key={m.serialNumber}
                   className="border-t border-[#243A41] hover:bg-white/5 transition"
@@ -202,7 +205,7 @@ function MembersTab() {
               ))}
 
               {/* Empty state */}
-              {data && data.items.length === 0 && (
+              {(!isFetching && safeMembers.length === 0) && (
                 <tr>
                   <td
                     colSpan={5}

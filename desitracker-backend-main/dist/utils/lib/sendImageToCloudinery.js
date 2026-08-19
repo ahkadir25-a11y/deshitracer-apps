@@ -28,15 +28,17 @@ const sendImageToCloudinary = (imageName, path, folderName) => {
             public_id: imageName,
             folder: folderName || config_1.default.cloudinaryImageFolderName,
         }, function (error, result) {
-            if (error) {
-                reject(error);
-            }
-            resolve(result);
+            // Always clean up the temp file; log (don't reject) if cleanup fails,
+            // since the promise may already be settled by then.
             fs_1.default.unlink(path, (err) => {
                 if (err) {
-                    reject(err);
+                    console.error('Failed to delete local file:', err);
                 }
             });
+            if (error) {
+                return reject(error);
+            }
+            resolve(result);
         });
     });
 };

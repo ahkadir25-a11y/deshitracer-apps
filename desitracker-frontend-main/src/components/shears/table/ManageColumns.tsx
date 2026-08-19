@@ -55,6 +55,7 @@ const ManageColumns: React.FC<ManageColumnsProps> = ({
             setColumns((prevColumns) => {
               const newColumns = [...prevColumns];
               const [removed] = newColumns.splice(oldIndex, 1);
+              if (!removed) return prevColumns;
               newColumns.splice(newIndex, 0, removed);
 
               const newOrder = newColumns.map((col) => col.key);

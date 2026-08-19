@@ -33,7 +33,7 @@ const SignInForm = () => {
     { key: "signin", label: "Account Info" },
     { key: "business", label: "Business Info" },
   ];
-  const currentStepIndex = steps.findIndex((s) => s.key === activeTab);
+  const currentStepIndex = Math.max(0, steps.findIndex((s) => s.key === activeTab));
 
   const router = useRouter();
   const [registerUser, { isLoading }] = useRegisterUserMutation();

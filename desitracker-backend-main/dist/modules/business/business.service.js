@@ -220,7 +220,7 @@ const getAllBusiness = (query) => __awaiter(void 0, void 0, void 0, function* ()
         newQuery.isActive = query.isActive === 'true'; // Correctly convert 'true' string to boolean true
     }
     if ((query === null || query === void 0 ? void 0 : query.isHalal) !== undefined)
-        newQuery.isHalal = query.isHalal;
+        newQuery.isHalal = query.isHalal === 'true';
     if (query === null || query === void 0 ? void 0 : query.howToHearAboutDesiTracker)
         newQuery.howToHearAboutDesiTracker = query.howToHearAboutDesiTracker;
     // Features filtering
@@ -233,9 +233,11 @@ const getAllBusiness = (query) => __awaiter(void 0, void 0, void 0, function* ()
     if (query === null || query === void 0 ? void 0 : query.foodOptions)
         newQuery['features.foodOptions'] = query.foodOptions;
     if ((query === null || query === void 0 ? void 0 : query.offerSpecialDiscount) !== undefined)
-        newQuery['features.offerSpecialDiscount'] = query.offerSpecialDiscount;
+        newQuery['features.offerSpecialDiscount'] =
+            query.offerSpecialDiscount === 'true';
     if ((query === null || query === void 0 ? void 0 : query.isWheelChairAccessible) !== undefined)
-        newQuery['features.isWheelChairAccessible'] = query.isWheelChairAccessible;
+        newQuery['features.isWheelChairAccessible'] =
+            query.isWheelChairAccessible === 'true';
     // Contact details
     if (query === null || query === void 0 ? void 0 : query.phoneNumber)
         newQuery['contactDetails.phoneNumber'] = query.phoneNumber;
@@ -244,19 +246,19 @@ const getAllBusiness = (query) => __awaiter(void 0, void 0, void 0, function* ()
     // Operation details
     if ((query === null || query === void 0 ? void 0 : query.provideHomeDelivery) !== undefined)
         newQuery['operationDetails.provideHomeDelivery'] =
-            query.provideHomeDelivery;
+            query.provideHomeDelivery === 'true';
     if ((query === null || query === void 0 ? void 0 : query.provideOnlineService) !== undefined)
         newQuery['operationDetails.provideOnlineService'] =
-            query.provideOnlineService;
+            query.provideOnlineService === 'true';
     if ((query === null || query === void 0 ? void 0 : query.offerInStorePickup) !== undefined)
         newQuery['operationDetails.offerInStorePickup'] =
-            query.offerInStorePickup;
+            query.offerInStorePickup === 'true';
     if ((query === null || query === void 0 ? void 0 : query.isParkingAvailable) !== undefined)
         newQuery['operationDetails.isParkingAvailable'] =
-            query.isParkingAvailable;
+            query.isParkingAvailable === 'true';
     if ((query === null || query === void 0 ? void 0 : query.offerOnlineBooking) !== undefined)
         newQuery['operationDetails.offerOnlineBooking'] =
-            query.offerOnlineBooking;
+            query.offerOnlineBooking === 'true';
     if (query === null || query === void 0 ? void 0 : query.onlineBookingLink)
         newQuery['operationDetails.onlineBookingLink'] =
             query.onlineBookingLink;

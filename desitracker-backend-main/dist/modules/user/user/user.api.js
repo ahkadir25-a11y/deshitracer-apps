@@ -12,8 +12,12 @@ const user_controllers_1 = require("./user.controllers");
 const router = (0, express_1.Router)();
 router.post('/register', sendImageToCloudinery_1.upload.single('file'), (req, res, next) => {
     var _a;
-    console.log('bor ouch');
-    req.body = JSON.parse((_a = req === null || req === void 0 ? void 0 : req.body) === null || _a === void 0 ? void 0 : _a.data);
+    try {
+        req.body = JSON.parse((_a = req === null || req === void 0 ? void 0 : req.body) === null || _a === void 0 ? void 0 : _a.data);
+    }
+    catch (_b) {
+        return res.status(400).json({ message: 'Invalid JSON in request body.data' });
+    }
     next();
 }, user_controllers_1.UserControllers.registerUser);
 router.get('/me', (0, auth_1.default)(auth_constants_1.USER_ROLE.USER, auth_constants_1.USER_ROLE.ADMIN, auth_constants_1.USER_ROLE.BUSINESS_OWNER, auth_constants_1.USER_ROLE.STAFF), user_controllers_1.UserControllers.getMe);

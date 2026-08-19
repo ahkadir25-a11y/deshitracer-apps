@@ -13,19 +13,25 @@ exports.sendContactMessage = void 0;
 const contactService_1 = require("./contactService");
 // Controller to handle the contact form submission
 const sendContactMessage = (req, res) => __awaiter(void 0, void 0, void 0, function* () {
-    const { name, email, message, phone } = req.body;
-    // Validate input
-    if (!name || !email || !message || !phone) {
-        res.status(400).json({ error: 'Please provide all fields: name, email, message' });
-        return;
+    try {
+        const { name, email, message, phone } = req.body;
+        // Validate input
+        if (!name || !email || !message || !phone) {
+            res.status(400).json({ error: 'Please provide all fields: name, email, message' });
+            return;
+        }
+        const contactMessage = { name, email, message, phone };
+        // Call the service to send the email
+        const emailSent = yield (0, contactService_1.sendContactEmail)(contactMessage);
+        if (emailSent) {
+            res.status(200).json({ message: 'Message sent successfully' });
+        }
+        else {
+            res.status(500).json({ error: 'There was an error sending the email' });
+        }
     }
-    const contactMessage = { name, email, message, phone };
-    // Call the service to send the email
-    const emailSent = yield (0, contactService_1.sendContactEmail)(contactMessage);
-    if (emailSent) {
-        res.status(200).json({ message: 'Message sent successfully' });
-    }
-    else {
+    catch (err) {
+        console.error('[contact] Failed to send contact message:', err);
         res.status(500).json({ error: 'There was an error sending the email' });
     }
 });

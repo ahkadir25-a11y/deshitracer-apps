@@ -14,6 +14,10 @@ export interface IMember extends Document {
   qrCodeUrl?: string;
   active: boolean;
   expoPushToken?: string | null;
+  notificationPrefs?: {
+    newOffers: boolean;
+    promotionalEmails: boolean;
+  };
   deletedAt?: Date | null;
   comparePassword(candidate: string): Promise<boolean>;
 }
@@ -33,6 +37,13 @@ const MemberSchema = new Schema<IMember>(
 
     active: { type: Boolean, default: true },
     expoPushToken: { type: String, default: null },
+    // Only toggles that map to a notification the system actually sends:
+    // newOffers -> the "New Member Offer!" push, promotionalEmails -> lead
+    // promotion emails. Default true so existing members are unaffected.
+    notificationPrefs: {
+      newOffers: { type: Boolean, default: true },
+      promotionalEmails: { type: Boolean, default: true },
+    },
     deletedAt: { type: Date, default: null },
   },
   { timestamps: true }

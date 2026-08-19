@@ -61,6 +61,13 @@ const MemberSchema = new mongoose_1.Schema({
     qrCodeUrl: { type: String },
     active: { type: Boolean, default: true },
     expoPushToken: { type: String, default: null },
+    // Only toggles that map to a notification the system actually sends:
+    // newOffers -> the "New Member Offer!" push, promotionalEmails -> lead
+    // promotion emails. Default true so existing members are unaffected.
+    notificationPrefs: {
+        newOffers: { type: Boolean, default: true },
+        promotionalEmails: { type: Boolean, default: true },
+    },
     deletedAt: { type: Date, default: null },
 }, { timestamps: true });
 MemberSchema.pre('save', function (next) {

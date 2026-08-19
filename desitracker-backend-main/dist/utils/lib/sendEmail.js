@@ -52,7 +52,7 @@ const sendEmail = (options) => __awaiter(void 0, void 0, void 0, function* () {
     }
     catch (error) {
         console.error(`Failed to send email to ${options.email}: ${error === null || error === void 0 ? void 0 : error.message}`);
-        throw new Error('Failed to send email');
+        throw new Error(`Failed to send email: ${(error === null || error === void 0 ? void 0 : error.message) || error}`);
     }
 });
 exports.default = sendEmail;
