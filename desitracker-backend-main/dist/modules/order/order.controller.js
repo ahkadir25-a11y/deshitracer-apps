@@ -46,7 +46,12 @@ exports.OrderControllers = void 0;
 const orderService = __importStar(require("./order.service"));
 const createOrder = (req, res) => __awaiter(void 0, void 0, void 0, function* () {
     try {
-        const { business_id, user_id, businessName, tableNo, notes, items, totals, membershipDiscount, currency, status, customerName, customerPhone, customerEmail, guestCount, orderType, deliveryAddress, deliveryFee, requestedTime, } = req.body;
+        const { business_id, user_id, 
+        // Who actually took the order. user_id is the business OWNER (products
+        // are keyed by them), so without these two the app cannot tell one
+        // waiter's tickets from another's — every Ready-to-Serve list came back
+        // empty because the only id on the order belonged to the owner.
+        staffUserId, staffName, businessName, tableNo, notes, items, totals, membershipDiscount, currency, status, customerName, customerPhone, customerEmail, guestCount, orderType, deliveryAddress, deliveryFee, requestedTime, } = req.body;
         if (!business_id) {
             res.status(400).json({ error: "business_id is required." });
             return;
@@ -58,6 +63,8 @@ const createOrder = (req, res) => __awaiter(void 0, void 0, void 0, function* ()
         const created = yield orderService.createOrder({
             business_id,
             user_id,
+            staffUserId: staffUserId || undefined,
+            staffName: staffName || "",
             businessName,
             tableNo,
             notes,

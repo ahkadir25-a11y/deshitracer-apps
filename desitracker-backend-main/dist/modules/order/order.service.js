@@ -53,6 +53,40 @@ const AppError_1 = __importDefault(require("../../errors/AppError"));
 const push_1 = require("../../utils/lib/push");
 const employee_model_1 = require("../rota/employee/employee.model");
 const timesheet_model_1 = require("../rota/timesheet/timesheet.model");
+// What a product actually costs right now, discount included.
+//
+// This mirrors the `final_price` virtual on the product schema. It has to be
+// duplicated rather than reused because the lookup below uses `.lean()`, and
+// lean documents carry no virtuals — the previous `.select('price')` therefore
+// returned the pre-discount price and quietly overwrote the discounted price
+// the waiter had quoted at the table. A dish on 20% off was shown at 80 and
+// billed at 100.
+const effectivePrice = (p, now = new Date()) => {
+    const base = Number(p === null || p === void 0 ? void 0 : p.price) || 0;
+    const pct = Number(p === null || p === void 0 ? void 0 : p.discount_percent) || 0;
+    if (pct <= 0)
+        return base;
+    const start = (p === null || p === void 0 ? void 0 : p.discount_start) ? new Date(p.discount_start) : null;
+    const end = (p === null || p === void 0 ? void 0 : p.discount_end) ? new Date(p.discount_end) : null;
+    if (start && now < start)
+        return base; // discount hasn't started
+    if (end && now > end)
+        return base; // discount has expired
+    return Math.round(base * (1 - pct / 100) * 100) / 100;
+};
+// Catalog prices for a set of product ids, scoped to one business so an id
+// from another tenant can never set a price here.
+const catalogPriceMap = (ids, business_id) => __awaiter(void 0, void 0, void 0, function* () {
+    const map = new Map();
+    if (!ids.length)
+        return map;
+    const { default: Product } = yield Promise.resolve().then(() => __importStar(require('../product/product.model')));
+    const products = yield Product.find({ _id: { $in: ids }, business_id })
+        .select('price discount_percent discount_start discount_end')
+        .lean();
+    products.forEach((p) => map.set(String(p._id), effectivePrice(p)));
+    return map;
+});
 const createOrder = (payload) => __awaiter(void 0, void 0, void 0, function* () {
     // If this is a dine-in order and tableNo is provided, link to the table.
     // Auto-create the table record if it doesn't exist yet — staff often type a
@@ -103,17 +137,10 @@ const createOrder = (payload) => __awaiter(void 0, void 0, void 0, function* () 
     // corrected line prices, so a tampered total can't create a free order.
     if (payload.items && Array.isArray(payload.items)) {
         try {
-            const { default: Product } = yield Promise.resolve().then(() => __importStar(require('../product/product.model')));
             const ids = payload.items
                 .map((it) => it.productId || it.product_id || it._id)
                 .filter(Boolean);
-            let priceMap = new Map();
-            if (ids.length) {
-                const products = yield Product.find({ _id: { $in: ids }, business_id: payload.business_id })
-                    .select('price')
-                    .lean();
-                priceMap = new Map(products.map((p) => [String(p._id), Number(p.price)]));
-            }
+            const priceMap = yield catalogPriceMap(ids, payload.business_id);
             payload.items = payload.items.map((it) => {
                 const pid = String(it.productId || it.product_id || it._id || '');
                 const catalogPrice = priceMap.get(pid);
@@ -252,8 +279,25 @@ const addItemsToOrder = (id, business_id, newItems) => __awaiter(void 0, void 0,
     // Determine the next round number
     const currentMaxRound = order.items.reduce((max, item) => Math.max(max, item.round || 1), 0);
     const nextRound = currentMaxRound + 1;
+    // Same rule as createOrder: never trust a client-supplied price. This path
+    // had no check at all, so a second round could be added at any price the
+    // caller chose — and the two order paths could bill the same dish
+    // differently depending on which screen the waiter used.
+    let priceMap = new Map();
+    try {
+        priceMap = yield catalogPriceMap(newItems.map((it) => it.productId || it.product_id || it._id).filter(Boolean), business_id);
+    }
+    catch (e) {
+        // A catalog lookup failure must not block food reaching the kitchen; fall
+        // back to the submitted prices, clamped, exactly as createOrder does.
+        console.error('[order] add-items price lookup failed:', e === null || e === void 0 ? void 0 : e.message);
+    }
     // Append new items
-    const itemsToAdd = newItems.map(item => (Object.assign(Object.assign({}, item), { kitchenStatus: "SENT_TO_KITCHEN", sentToKitchenAt: new Date(), round: nextRound })));
+    const itemsToAdd = newItems.map(item => {
+        const pid = String(item.productId || item.product_id || item._id || '');
+        const catalogPrice = priceMap.get(pid);
+        return Object.assign(Object.assign({}, item), { price: catalogPrice != null ? catalogPrice : Math.max(0, Number(item.price) || 0), kitchenStatus: "SENT_TO_KITCHEN", sentToKitchenAt: new Date(), round: nextRound });
+    });
     order.items.push(...itemsToAdd);
     // Recalculate totals
     order.totalQty += itemsToAdd.reduce((sum, item) => sum + (item.quantity || 1), 0);
@@ -330,18 +374,52 @@ const getOrderById = (id, business_id) => __awaiter(void 0, void 0, void 0, func
 });
 exports.getOrderById = getOrderById;
 const updateOrder = (id, business_id, updates) => __awaiter(void 0, void 0, void 0, function* () {
-    var _a;
+    var _a, _b;
     const order = yield order_model_1.Order.findOne({ _id: id, business_id });
     if (!order)
         throw new AppError_1.default(404, "Order not found");
     const oldPaymentStatus = order.paymentStatus;
     Object.assign(order, updates);
+    // Editing the item list has to move the money with it. This used to be a
+    // bare Object.assign, so removing a dish left `subtotal` untouched — and
+    // since recordPayment bills from computeGrandTotal(order), which reads
+    // `subtotal`, the customer was still charged for food that was taken off
+    // the order. Prices are re-read from the catalog for the same reason they
+    // are on create: a client must not be able to name its own price.
+    //
+    // Only runs when the caller actually sent items; callers that just flip
+    // paymentStatus or kitchenStatus are left alone.
+    if (Array.isArray(updates === null || updates === void 0 ? void 0 : updates.items)) {
+        try {
+            const priceMap = yield catalogPriceMap(order.items
+                .map((it) => it.productId || it.product_id || it._id)
+                .filter(Boolean), business_id);
+            order.items.forEach((it) => {
+                const catalogPrice = priceMap.get(String(it.productId || it.product_id || it._id || ''));
+                it.price = catalogPrice != null ? catalogPrice : Math.max(0, Number(it.price) || 0);
+            });
+        }
+        catch (e) {
+            console.error('[order] update price re-read failed:', e === null || e === void 0 ? void 0 : e.message);
+        }
+        // VOIDED lines stay in the array for audit but are not billed — the same
+        // rule the void-approval path applies to the rollups.
+        const billable = order.items.filter((it) => it.kitchenStatus !== 'VOIDED');
+        order.totalQty = billable.reduce((s, it) => s + (Number(it.quantity) || 1), 0);
+        order.subtotal = billable.reduce((s, it) => s + Number(it.price || 0) * (Number(it.quantity) || 1), 0);
+        if ((_a = order.membershipDiscount) === null || _a === void 0 ? void 0 : _a.applied) {
+            order.membershipDiscount.payable = Math.max(0, order.subtotal - (Number(order.membershipDiscount.discountAmount) || 0));
+        }
+        else if (order.membershipDiscount) {
+            order.membershipDiscount.payable = order.subtotal;
+        }
+    }
     yield order.save();
     // If payment status changed to PAID, free up the table
     if (oldPaymentStatus !== 'PAID' && order.paymentStatus === 'PAID') {
         if (order.orderType === 'dine-in' && order.tableNo) {
             const table = yield table_model_1.Table.findOne({ business_id, tableNo: order.tableNo });
-            if (table && ((_a = table.activeOrderId) === null || _a === void 0 ? void 0 : _a.toString()) === order._id.toString()) {
+            if (table && ((_b = table.activeOrderId) === null || _b === void 0 ? void 0 : _b.toString()) === order._id.toString()) {
                 table.status = 'AVAILABLE';
                 table.activeOrderId = null;
                 yield table.save();

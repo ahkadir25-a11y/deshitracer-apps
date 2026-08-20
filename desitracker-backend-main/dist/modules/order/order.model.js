@@ -17,6 +17,9 @@ const OrderItemSchema = new mongoose_1.Schema({
     product_category_id: { type: mongoose_1.Types.ObjectId, ref: "ProductCategory" },
     product_category_type: { type: String },
     selectedOptions: { type: [OrderItemOptionSchema], default: [] },
+    // Free-text instruction for the kitchen on this line only ("no chilli").
+    // Two lines of the same dish can differ by note alone, which is why the
+    // client folds the note into the lineId.
     note: { type: String, default: "" },
     // Item-level KDS tracking
     // Flow: NOT_SENT → SENT_TO_KITCHEN → PREPARING → READY → DONE → SERVED.

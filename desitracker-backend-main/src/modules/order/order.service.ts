@@ -6,6 +6,38 @@ import { sendExpoPush } from "../../utils/lib/push";
 import { RotaEmployee } from "../rota/employee/employee.model";
 import { RotaTimesheet } from "../rota/timesheet/timesheet.model";
 
+// What a product actually costs right now, discount included.
+//
+// This mirrors the `final_price` virtual on the product schema. It has to be
+// duplicated rather than reused because the lookup below uses `.lean()`, and
+// lean documents carry no virtuals — the previous `.select('price')` therefore
+// returned the pre-discount price and quietly overwrote the discounted price
+// the waiter had quoted at the table. A dish on 20% off was shown at 80 and
+// billed at 100.
+const effectivePrice = (p: any, now = new Date()): number => {
+  const base = Number(p?.price) || 0;
+  const pct = Number(p?.discount_percent) || 0;
+  if (pct <= 0) return base;
+  const start = p?.discount_start ? new Date(p.discount_start) : null;
+  const end = p?.discount_end ? new Date(p.discount_end) : null;
+  if (start && now < start) return base;   // discount hasn't started
+  if (end && now > end) return base;       // discount has expired
+  return Math.round(base * (1 - pct / 100) * 100) / 100;
+};
+
+// Catalog prices for a set of product ids, scoped to one business so an id
+// from another tenant can never set a price here.
+const catalogPriceMap = async (ids: any[], business_id: any) => {
+  const map = new Map<string, number>();
+  if (!ids.length) return map;
+  const { default: Product } = await import('../product/product.model');
+  const products = await Product.find({ _id: { $in: ids }, business_id })
+    .select('price discount_percent discount_start discount_end')
+    .lean();
+  products.forEach((p: any) => map.set(String(p._id), effectivePrice(p)));
+  return map;
+};
+
 export const createOrder = async (payload: any) => {
   // If this is a dine-in order and tableNo is provided, link to the table.
   // Auto-create the table record if it doesn't exist yet — staff often type a
@@ -63,17 +95,10 @@ export const createOrder = async (payload: any) => {
   // corrected line prices, so a tampered total can't create a free order.
   if (payload.items && Array.isArray(payload.items)) {
     try {
-      const { default: Product } = await import('../product/product.model');
       const ids = payload.items
         .map((it: any) => it.productId || it.product_id || it._id)
         .filter(Boolean);
-      let priceMap = new Map<string, number>();
-      if (ids.length) {
-        const products = await Product.find({ _id: { $in: ids }, business_id: payload.business_id })
-          .select('price')
-          .lean();
-        priceMap = new Map(products.map((p: any) => [String(p._id), Number(p.price)]));
-      }
+      const priceMap = await catalogPriceMap(ids, payload.business_id);
       payload.items = payload.items.map((it: any) => {
         const pid = String(it.productId || it.product_id || it._id || '');
         const catalogPrice = priceMap.get(pid);
@@ -227,13 +252,34 @@ export const addItemsToOrder = async (id: string, business_id: string, newItems:
   const currentMaxRound = order.items.reduce((max: number, item: any) => Math.max(max, item.round || 1), 0);
   const nextRound = currentMaxRound + 1;
 
+  // Same rule as createOrder: never trust a client-supplied price. This path
+  // had no check at all, so a second round could be added at any price the
+  // caller chose — and the two order paths could bill the same dish
+  // differently depending on which screen the waiter used.
+  let priceMap = new Map<string, number>();
+  try {
+    priceMap = await catalogPriceMap(
+      newItems.map((it: any) => it.productId || it.product_id || it._id).filter(Boolean),
+      business_id,
+    );
+  } catch (e: any) {
+    // A catalog lookup failure must not block food reaching the kitchen; fall
+    // back to the submitted prices, clamped, exactly as createOrder does.
+    console.error('[order] add-items price lookup failed:', e?.message);
+  }
+
   // Append new items
-  const itemsToAdd = newItems.map(item => ({
-    ...item,
-    kitchenStatus: "SENT_TO_KITCHEN",
-    sentToKitchenAt: new Date(),
-    round: nextRound,
-  }));
+  const itemsToAdd = newItems.map(item => {
+    const pid = String(item.productId || item.product_id || item._id || '');
+    const catalogPrice = priceMap.get(pid);
+    return {
+      ...item,
+      price: catalogPrice != null ? catalogPrice : Math.max(0, Number(item.price) || 0),
+      kitchenStatus: "SENT_TO_KITCHEN",
+      sentToKitchenAt: new Date(),
+      round: nextRound,
+    };
+  });
 
   order.items.push(...itemsToAdd);
   
@@ -329,8 +375,52 @@ export const updateOrder = async (id: string, business_id: string, updates: any)
   if (!order) throw new AppError(404, "Order not found");
 
   const oldPaymentStatus = order.paymentStatus;
-  
+
   Object.assign(order, updates);
+
+  // Editing the item list has to move the money with it. This used to be a
+  // bare Object.assign, so removing a dish left `subtotal` untouched — and
+  // since recordPayment bills from computeGrandTotal(order), which reads
+  // `subtotal`, the customer was still charged for food that was taken off
+  // the order. Prices are re-read from the catalog for the same reason they
+  // are on create: a client must not be able to name its own price.
+  //
+  // Only runs when the caller actually sent items; callers that just flip
+  // paymentStatus or kitchenStatus are left alone.
+  if (Array.isArray(updates?.items)) {
+    try {
+      const priceMap = await catalogPriceMap(
+        order.items
+          .map((it: any) => it.productId || it.product_id || it._id)
+          .filter(Boolean),
+        business_id,
+      );
+      order.items.forEach((it: any) => {
+        const catalogPrice = priceMap.get(String(it.productId || it.product_id || it._id || ''));
+        it.price = catalogPrice != null ? catalogPrice : Math.max(0, Number(it.price) || 0);
+      });
+    } catch (e: any) {
+      console.error('[order] update price re-read failed:', e?.message);
+    }
+
+    // VOIDED lines stay in the array for audit but are not billed — the same
+    // rule the void-approval path applies to the rollups.
+    const billable = order.items.filter((it: any) => it.kitchenStatus !== 'VOIDED');
+    order.totalQty = billable.reduce((s: number, it: any) => s + (Number(it.quantity) || 1), 0);
+    order.subtotal = billable.reduce(
+      (s: number, it: any) => s + Number(it.price || 0) * (Number(it.quantity) || 1),
+      0,
+    );
+    if (order.membershipDiscount?.applied) {
+      order.membershipDiscount.payable = Math.max(
+        0,
+        order.subtotal - (Number(order.membershipDiscount.discountAmount) || 0),
+      );
+    } else if (order.membershipDiscount) {
+      order.membershipDiscount.payable = order.subtotal;
+    }
+  }
+
   await order.save();
 
   // If payment status changed to PAID, free up the table
