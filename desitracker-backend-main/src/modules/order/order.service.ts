@@ -376,6 +376,16 @@ export const updateOrder = async (id: string, business_id: string, updates: any)
 
   const oldPaymentStatus = order.paymentStatus;
 
+  // Prices as they stand before this edit, keyed by line. A price on an order
+  // is a historical record — it is what the customer agreed to pay. Re-reading
+  // the catalog for lines that are already on the order would silently re-price
+  // food that was ordered, cooked and eaten at yesterday's price the moment
+  // somebody edits the menu, so a waiter fixing a typo in a customer's name
+  // could change the bill.
+  const priorPrices = new Map<string, number>(
+    (order.items || []).map((it: any) => [String(it._id), Number(it.price) || 0])
+  );
+
   Object.assign(order, updates);
 
   // Editing the item list has to move the money with it. This used to be a
@@ -389,13 +399,20 @@ export const updateOrder = async (id: string, business_id: string, updates: any)
   // paymentStatus or kitchenStatus are left alone.
   if (Array.isArray(updates?.items)) {
     try {
+      // Only lines that are NEW to this order need a catalog price. Anything
+      // already on it keeps what it was sold at.
+      const addedLines = order.items.filter((it: any) => !priorPrices.has(String(it._id)));
       const priceMap = await catalogPriceMap(
-        order.items
+        addedLines
           .map((it: any) => it.productId || it.product_id || it._id)
           .filter(Boolean),
         business_id,
       );
       order.items.forEach((it: any) => {
+        const prior = priorPrices.get(String(it._id));
+        if (prior != null) { it.price = prior; return; }
+        // New line — priced from the catalog for the same reason create does:
+        // a client must not be able to name its own price.
         const catalogPrice = priceMap.get(String(it.productId || it.product_id || it._id || ''));
         it.price = catalogPrice != null ? catalogPrice : Math.max(0, Number(it.price) || 0);
       });
