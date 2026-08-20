@@ -6,6 +6,12 @@ const createOrder = async (req: Request, res: Response) => {
     const {
       business_id,
       user_id,
+      // Who actually took the order. user_id is the business OWNER (products
+      // are keyed by them), so without these two the app cannot tell one
+      // waiter's tickets from another's — every Ready-to-Serve list came back
+      // empty because the only id on the order belonged to the owner.
+      staffUserId,
+      staffName,
       businessName,
       tableNo,
       notes,
@@ -37,6 +43,8 @@ const createOrder = async (req: Request, res: Response) => {
     const created = await orderService.createOrder({
       business_id,
       user_id,
+      staffUserId: staffUserId || undefined,
+      staffName: staffName || "",
       businessName,
       tableNo,
       notes,
