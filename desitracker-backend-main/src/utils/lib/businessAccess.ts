@@ -159,3 +159,51 @@ export const authOrderRead: RequestHandler = async (req, res, next) => {
     next(e);
   }
 };
+
+/**
+ * Ownership check driven by the RECORD, not by what the caller sent.
+ *
+ * The write routes for products, categories and day-offers take an id in the
+ * URL and were guarded only by a role check — any authenticated staff member
+ * of any business could edit or delete any product on the platform simply by
+ * knowing its id. Checking a business id out of the request body does not help:
+ * the attacker supplies that too, and passing their own is exactly what makes
+ * such a check succeed.
+ *
+ * So the business is read off the stored document and the caller is tested
+ * against that.
+ *
+ * Throws 404 when the record does not exist and 403 when it belongs to someone
+ * else — a missing record must not be reported differently from a forbidden
+ * one, or the endpoint becomes a way to enumerate which ids exist.
+ */
+export async function assertOwnsRecord(
+  // Deliberately untyped: `req.user` is declared globally as JwtPayload and
+  // the callers use RequestHandler with typed params, neither of which is
+  // assignable to a narrower shape. Only `user` is read, and it is validated
+  // below before use.
+  req: any,
+  doc: any,
+  notFoundMessage = 'Not found',
+): Promise<void> {
+  if (!doc) throw new AppError(404, notFoundMessage);
+
+  const user = (req as any).user;
+  if (!user?.id) throw new AppError(401, 'Not authenticated');
+
+  const businessId = String(doc.business_id || doc.business || '');
+  if (!businessId) {
+    // A record with no business cannot be proven to belong to the caller.
+    // Only an admin may touch it.
+    if (String(user.role) !== USER_ROLE.ADMIN) {
+      throw new AppError(403, 'You are not authorized for this record');
+    }
+    return;
+  }
+
+  const ok = await isBusinessMember(
+    { id: String(user.id), role: String(user.role), email: user.email },
+    businessId,
+  );
+  if (!ok) throw new AppError(404, notFoundMessage);
+}

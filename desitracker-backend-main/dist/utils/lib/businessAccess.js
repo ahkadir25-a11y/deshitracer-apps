@@ -49,6 +49,7 @@ exports.authOrderRead = exports.requireBusinessAccess = void 0;
 exports.resolvePrincipal = resolvePrincipal;
 exports.isBusinessMember = isBusinessMember;
 exports.canAccessUserScopedData = canAccessUserScopedData;
+exports.assertOwnsRecord = assertOwnsRecord;
 const jsonwebtoken_1 = __importDefault(require("jsonwebtoken"));
 const config_1 = __importDefault(require("../../config"));
 const config_2 = require("../../middlewares/config");
@@ -209,3 +210,46 @@ const authOrderRead = (req, res, next) => __awaiter(void 0, void 0, void 0, func
     }
 });
 exports.authOrderRead = authOrderRead;
+/**
+ * Ownership check driven by the RECORD, not by what the caller sent.
+ *
+ * The write routes for products, categories and day-offers take an id in the
+ * URL and were guarded only by a role check — any authenticated staff member
+ * of any business could edit or delete any product on the platform simply by
+ * knowing its id. Checking a business id out of the request body does not help:
+ * the attacker supplies that too, and passing their own is exactly what makes
+ * such a check succeed.
+ *
+ * So the business is read off the stored document and the caller is tested
+ * against that.
+ *
+ * Throws 404 when the record does not exist and 403 when it belongs to someone
+ * else — a missing record must not be reported differently from a forbidden
+ * one, or the endpoint becomes a way to enumerate which ids exist.
+ */
+function assertOwnsRecord(req_1, doc_1) {
+    return __awaiter(this, arguments, void 0, function* (
+    // Deliberately untyped: `req.user` is declared globally as JwtPayload and
+    // the callers use RequestHandler with typed params, neither of which is
+    // assignable to a narrower shape. Only `user` is read, and it is validated
+    // below before use.
+    req, doc, notFoundMessage = 'Not found') {
+        if (!doc)
+            throw new AppError_1.default(404, notFoundMessage);
+        const user = req.user;
+        if (!(user === null || user === void 0 ? void 0 : user.id))
+            throw new AppError_1.default(401, 'Not authenticated');
+        const businessId = String(doc.business_id || doc.business || '');
+        if (!businessId) {
+            // A record with no business cannot be proven to belong to the caller.
+            // Only an admin may touch it.
+            if (String(user.role) !== auth_constants_1.USER_ROLE.ADMIN) {
+                throw new AppError_1.default(403, 'You are not authorized for this record');
+            }
+            return;
+        }
+        const ok = yield isBusinessMember({ id: String(user.id), role: String(user.role), email: user.email }, businessId);
+        if (!ok)
+            throw new AppError_1.default(404, notFoundMessage);
+    });
+}

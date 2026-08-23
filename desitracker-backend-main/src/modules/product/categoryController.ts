@@ -2,6 +2,7 @@
 import { RequestHandler } from 'express';
 import slugify from 'slugify';
 import ProductCategory from './categoryModel';
+import { assertOwnsRecord } from '../../utils/lib/businessAccess';
 // types/category.dto.ts
 export interface CreateCategoryDTO {
   name: string;
@@ -75,6 +76,17 @@ export const getCategoryById: RequestHandler<CategoryIdParam> = async (req, res,
 export const updateCategory: RequestHandler<CategoryIdParam, any, UpdateCategoryDTO> =
   async (req, res, next) => {
     try {
+      // Prove the category belongs to a business the caller is part of. The
+      // route only checked their role, so any staff member of any business
+      // could rename or re-home any category on the platform.
+      await assertOwnsRecord(
+        req,
+        await ProductCategory.findById(req.params.id as string).select('business_id').lean(),
+        'Category not found',
+      );
+      // The body must not be able to move a category to another business.
+      delete (req.body as any).business_id;
+      delete (req.body as any).user_id;
       const updated = await ProductCategory.findByIdAndUpdate((req.params.id as string), req.body, { new: true });
       if (!updated) {
         res.status(404).json({ message: 'Category not found' });
@@ -88,6 +100,11 @@ export const updateCategory: RequestHandler<CategoryIdParam, any, UpdateCategory
 // Delete has no body; only params
 export const deleteCategory: RequestHandler<CategoryIdParam> = async (req, res, next) => {
   try {
+    await assertOwnsRecord(
+      req,
+      await ProductCategory.findById(req.params.id as string).select('business_id').lean(),
+      'Category not found',
+    );
     const deleted = await ProductCategory.findByIdAndDelete((req.params.id as string));
     if (!deleted) {
       res.status(404).json({ message: 'Category not found' });

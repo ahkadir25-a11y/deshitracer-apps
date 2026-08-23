@@ -1,3 +1,4 @@
+import { Types } from 'mongoose';
 import { Order } from "./order.model";
 import { Table } from "../table/table.model";
 import { getSocketIO } from "../../utils/socket";
@@ -29,9 +30,19 @@ const effectivePrice = (p: any, now = new Date()): number => {
 // from another tenant can never set a price here.
 const catalogPriceMap = async (ids: any[], business_id: any) => {
   const map = new Map<string, number>();
-  if (!ids.length) return map;
+  // Drop anything that is not a real ObjectId BEFORE querying. A single
+  // malformed id used to make Mongoose throw a CastError, and the callers
+  // caught that and fell back to client-supplied prices — so sending one bad
+  // id alongside a real order was enough to name your own price, including
+  // zero. Filtering here means the lookup cannot be knocked over on purpose;
+  // an unknown id simply has no catalog price, which the callers already
+  // handle as a custom item.
+  const valid = (Array.isArray(ids) ? ids : []).filter((id) =>
+    Types.ObjectId.isValid(String(id ?? '')),
+  );
+  if (!valid.length) return map;
   const { default: Product } = await import('../product/product.model');
-  const products = await Product.find({ _id: { $in: ids }, business_id })
+  const products = await Product.find({ _id: { $in: valid }, business_id })
     .select('price discount_percent discount_start discount_end')
     .lean();
   products.forEach((p: any) => map.set(String(p._id), effectivePrice(p)));
@@ -114,10 +125,14 @@ export const createOrder = async (payload: any) => {
         payload.membershipDiscount.payable = subtotal;
       }
     } catch (e: any) {
-      // Defensive: if catalog lookup fails (e.g. malformed id), fall back to the
-      // submitted prices rather than blocking the order. Still clamp negatives.
+      // Refuse the order rather than bill whatever the client asked to pay.
+      // This used to fall back to the submitted prices so an order was never
+      // dropped, which meant anyone who could make this lookup fail could set
+      // their own price. Malformed ids no longer reach the query, so getting
+      // here means the database itself is unavailable — and taking an order
+      // whose price nobody has checked is worse than taking no order.
       console.error('[order] price recompute failed:', e?.message);
-      payload.items = payload.items.map((it: any) => ({ ...it, price: Math.max(0, Number(it.price) || 0) }));
+      throw new AppError(503, 'We could not confirm prices just now. Please try again in a moment.');
     }
   }
 
@@ -263,9 +278,11 @@ export const addItemsToOrder = async (id: string, business_id: string, newItems:
       business_id,
     );
   } catch (e: any) {
-    // A catalog lookup failure must not block food reaching the kitchen; fall
-    // back to the submitted prices, clamped, exactly as createOrder does.
+    // Same rule as createOrder: an unpriced line must not be billed at whatever
+    // the caller sent. Malformed ids are filtered before the query, so reaching
+    // here means the lookup itself failed.
     console.error('[order] add-items price lookup failed:', e?.message);
+    throw new AppError(503, 'We could not confirm prices just now. Please try again in a moment.');
   }
 
   // Append new items
@@ -349,21 +366,53 @@ export const updateOrderItemKitchenStatus = async (orderId: string, itemId: stri
   return order;
 };
 
+// This returned every order a business had ever taken, with all its nested
+// items, on every dashboard load — no date range and no limit. That gets
+// slower every week for as long as the restaurant stays open.
+//
+// `from`/`to` and `limit` are optional and the behaviour with none of them is
+// exactly what it was, because the dashboard sums these rows to show revenue:
+// silently truncating the list would have quietly changed the money on screen.
+// Callers opt in to a window instead, and the screens now do.
+const MAX_ORDER_PAGE = 2000;
+
 export const listOrders = async ({
   business_id,
   user_id,
   status,
+  from,
+  to,
+  limit,
 }: {
   business_id?: string;
   user_id?: string;
   status?: string;
+  from?: string;
+  to?: string;
+  limit?: number | string;
 }) => {
   const q: any = {};
   if (business_id) q.business_id = business_id;
   if (user_id) q.user_id = user_id;
   if (status) q.status = status;
 
-  return Order.find(q).sort({ createdAt: -1 });
+  const range: any = {};
+  const fromDate = from ? new Date(String(from)) : null;
+  const toDate = to ? new Date(String(to)) : null;
+  if (fromDate && !Number.isNaN(fromDate.getTime())) range.$gte = fromDate;
+  if (toDate && !Number.isNaN(toDate.getTime())) range.$lte = toDate;
+  if (Object.keys(range).length) q.createdAt = range;
+
+  const query = Order.find(q).sort({ createdAt: -1 });
+
+  // A caller that asks for a limit gets one, clamped. A caller that asks for
+  // nothing still gets everything in the window it requested.
+  const asked = Number(limit);
+  if (Number.isFinite(asked) && asked > 0) {
+    query.limit(Math.min(Math.floor(asked), MAX_ORDER_PAGE));
+  }
+
+  return query;
 };
 
 export const getOrderById = async (id: string, business_id: string) => {
@@ -417,7 +466,10 @@ export const updateOrder = async (id: string, business_id: string, updates: any)
         it.price = catalogPrice != null ? catalogPrice : Math.max(0, Number(it.price) || 0);
       });
     } catch (e: any) {
+      // Same rule again: no line gets billed at a price the server has not
+      // read from the catalog itself.
       console.error('[order] update price re-read failed:', e?.message);
+      throw new AppError(503, 'We could not confirm prices just now. Please try again in a moment.');
     }
 
     // VOIDED lines stay in the array for audit but are not billed — the same

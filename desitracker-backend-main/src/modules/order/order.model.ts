@@ -180,6 +180,9 @@ const OrderSchema = new Schema(
 
 // Hot path: business order lists filtered by status, newest first.
 OrderSchema.index({ business_id: 1, status: 1, createdAt: -1 });
+// Date-window listing for the dashboard. The composite above cannot serve a
+// business+date range efficiently because status sits between the two fields.
+OrderSchema.index({ business_id: 1, createdAt: -1 });
 // Customer order history, newest first.
 OrderSchema.index({ user_id: 1, createdAt: -1 });
 

@@ -1,6 +1,31 @@
 import { Request, Response } from 'express';
 import fridgeService from './fridge.service';
 import { canAccessUserScopedData } from '../../utils/lib/businessAccess';
+import Fridge from './fridge.model';
+
+// Reads were guarded against cross-tenant access; writes were not. Temperature
+// logs are HACCP records, so a fabricated entry in a rival's log is a
+// compliance problem rather than merely wrong data.
+const denyIfNotAllowed = async (req: Request, res: Response, targetUserId: any): Promise<boolean> => {
+  const caller = (req as any).user;
+  const allowed = await canAccessUserScopedData(
+    caller?.id,
+    caller?.role,
+    targetUserId ? String(targetUserId) : undefined,
+    caller?.email,
+  );
+  if (!allowed) {
+    res.status(403).json({ message: 'You are not authorized to change this data' });
+    return true;
+  }
+  return false;
+};
+
+// Records are written against a fridge id, so the owner is read off the fridge.
+const ownerOfFridge = async (fridgeId: any): Promise<string | undefined> => {
+  const fridge = await Fridge.findById(String(fridgeId || '')).select('userId').lean();
+  return (fridge as any)?.userId ? String((fridge as any).userId) : undefined;
+};
 
 const getErrorMessage = (err: unknown): string => {
   if (err instanceof Error) return err.message;
@@ -13,6 +38,7 @@ class FridgeController {
   public async createFridge(req: Request, res: Response): Promise<void> {
     try {
       const { userId, fridgeName, fridgeLocation } = req.body;
+      if (await denyIfNotAllowed(req, res, userId)) return;
 
       const fridge = await fridgeService.createFridge(
         userId,
@@ -30,6 +56,7 @@ class FridgeController {
   public async addTemperatureRecord(req: Request, res: Response): Promise<void> {
     try {
       const { fridgeId, minTemperature, maxTemperature, date } = req.body; // include date
+      if (await denyIfNotAllowed(req, res, await ownerOfFridge(fridgeId))) return;
 
       const updatedFridge = await fridgeService.addTemperatureRecord(
         fridgeId,
@@ -48,6 +75,7 @@ class FridgeController {
   public async editTemperatureRecord(req: Request, res: Response): Promise<void> {
     try {
       const { fridgeId, recordId, minTemperature, maxTemperature } = req.body;
+      if (await denyIfNotAllowed(req, res, await ownerOfFridge(fridgeId))) return;
 
       const updatedFridge = await fridgeService.editTemperatureRecord(
         fridgeId,

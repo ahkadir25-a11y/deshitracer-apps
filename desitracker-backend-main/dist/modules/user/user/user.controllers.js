@@ -63,9 +63,31 @@ const registerUser = (0, handleAsyncRequest_1.default)((req, res) => __awaiter(v
     });
 }));
 // Get User Detail
+// Any signed-in user could fetch any other user's full record here, which put
+// the whole user base's emails and phone numbers one loop away from being
+// harvested. The route is left reachable because callers legitimately need to
+// resolve a name from an id; what changes is that contact details are stripped
+// unless the caller is that user or an admin.
+const PUBLIC_USER_FIELDS = ['_id', 'name', 'role', 'image', 'profileImage', 'createdAt'];
+const stripPII = (doc) => {
+    const src = typeof (doc === null || doc === void 0 ? void 0 : doc.toObject) === 'function' ? doc.toObject() : doc;
+    if (!src)
+        return src;
+    const out = {};
+    for (const key of PUBLIC_USER_FIELDS) {
+        if (src[key] !== undefined)
+            out[key] = src[key];
+    }
+    return out;
+};
 const getUserDetails = (0, handleAsyncRequest_1.default)((req, res) => __awaiter(void 0, void 0, void 0, function* () {
-    var _a;
-    const result = yield user_services_1.UserServices.getUserDetails((_a = req.params) === null || _a === void 0 ? void 0 : _a.id);
+    var _a, _b;
+    const targetId = String((_b = (_a = req.params) === null || _a === void 0 ? void 0 : _a.id) !== null && _b !== void 0 ? _b : '');
+    const full = yield user_services_1.UserServices.getUserDetails(targetId);
+    const caller = req.user;
+    const isSelf = (caller === null || caller === void 0 ? void 0 : caller.id) && String(caller.id) === targetId;
+    const isAdmin = String(caller === null || caller === void 0 ? void 0 : caller.role) === 'admin';
+    const result = isSelf || isAdmin ? full : stripPII(full);
     (0, sendResponse_1.default)(res, {
         success: true,
         statusCode: 200,

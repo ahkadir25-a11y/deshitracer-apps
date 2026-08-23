@@ -17,6 +17,8 @@ const http_status_1 = __importDefault(require("http-status"));
 const handleAsyncRequest_1 = __importDefault(require("../../utils/handleAsyncRequest"));
 const sendResponse_1 = __importDefault(require("../../utils/sendResponse"));
 const dinein_service_1 = require("./dinein.service");
+const dinein_model_1 = require("./dinein.model");
+const businessAccess_1 = require("../../utils/lib/businessAccess");
 const createTable = (0, handleAsyncRequest_1.default)((req, res) => __awaiter(void 0, void 0, void 0, function* () {
     const result = yield dinein_service_1.DineInServices.createTable(req.body);
     (0, sendResponse_1.default)(res, {
@@ -36,6 +38,8 @@ const getTablesByBusiness = (0, handleAsyncRequest_1.default)((req, res) => __aw
     });
 }));
 const updateTable = (0, handleAsyncRequest_1.default)((req, res) => __awaiter(void 0, void 0, void 0, function* () {
+    yield (0, businessAccess_1.assertOwnsRecord)(req, yield dinein_model_1.DineInTable.findById(req.params.tableId).select('business').lean(), 'Table not found');
+    delete req.body.business;
     const result = yield dinein_service_1.DineInServices.updateTable(req.params.tableId, req.body);
     (0, sendResponse_1.default)(res, {
         statusCode: http_status_1.default.OK,
@@ -45,6 +49,7 @@ const updateTable = (0, handleAsyncRequest_1.default)((req, res) => __awaiter(vo
     });
 }));
 const deleteTable = (0, handleAsyncRequest_1.default)((req, res) => __awaiter(void 0, void 0, void 0, function* () {
+    yield (0, businessAccess_1.assertOwnsRecord)(req, yield dinein_model_1.DineInTable.findById(req.params.tableId).select('business').lean(), 'Table not found');
     const result = yield dinein_service_1.DineInServices.deleteTable(req.params.tableId);
     (0, sendResponse_1.default)(res, {
         statusCode: http_status_1.default.OK,

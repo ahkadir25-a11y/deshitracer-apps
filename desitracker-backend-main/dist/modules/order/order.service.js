@@ -46,6 +46,7 @@ var __importDefault = (this && this.__importDefault) || function (mod) {
 };
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.deleteOrder = exports.transferTable = exports.decideItemVoid = exports.requestItemVoid = exports.recordPayment = exports.updateOrder = exports.getOrderById = exports.listOrders = exports.updateOrderItemKitchenStatus = exports.addItemsToOrder = exports.createOrder = void 0;
+const mongoose_1 = require("mongoose");
 const order_model_1 = require("./order.model");
 const table_model_1 = require("../table/table.model");
 const socket_1 = require("../../utils/socket");
@@ -78,10 +79,18 @@ const effectivePrice = (p, now = new Date()) => {
 // from another tenant can never set a price here.
 const catalogPriceMap = (ids, business_id) => __awaiter(void 0, void 0, void 0, function* () {
     const map = new Map();
-    if (!ids.length)
+    // Drop anything that is not a real ObjectId BEFORE querying. A single
+    // malformed id used to make Mongoose throw a CastError, and the callers
+    // caught that and fell back to client-supplied prices — so sending one bad
+    // id alongside a real order was enough to name your own price, including
+    // zero. Filtering here means the lookup cannot be knocked over on purpose;
+    // an unknown id simply has no catalog price, which the callers already
+    // handle as a custom item.
+    const valid = (Array.isArray(ids) ? ids : []).filter((id) => mongoose_1.Types.ObjectId.isValid(String(id !== null && id !== void 0 ? id : '')));
+    if (!valid.length)
         return map;
     const { default: Product } = yield Promise.resolve().then(() => __importStar(require('../product/product.model')));
-    const products = yield Product.find({ _id: { $in: ids }, business_id })
+    const products = yield Product.find({ _id: { $in: valid }, business_id })
         .select('price discount_percent discount_start discount_end')
         .lean();
     products.forEach((p) => map.set(String(p._id), effectivePrice(p)));
@@ -154,10 +163,14 @@ const createOrder = (payload) => __awaiter(void 0, void 0, void 0, function* () 
             }
         }
         catch (e) {
-            // Defensive: if catalog lookup fails (e.g. malformed id), fall back to the
-            // submitted prices rather than blocking the order. Still clamp negatives.
+            // Refuse the order rather than bill whatever the client asked to pay.
+            // This used to fall back to the submitted prices so an order was never
+            // dropped, which meant anyone who could make this lookup fail could set
+            // their own price. Malformed ids no longer reach the query, so getting
+            // here means the database itself is unavailable — and taking an order
+            // whose price nobody has checked is worse than taking no order.
             console.error('[order] price recompute failed:', e === null || e === void 0 ? void 0 : e.message);
-            payload.items = payload.items.map((it) => (Object.assign(Object.assign({}, it), { price: Math.max(0, Number(it.price) || 0) })));
+            throw new AppError_1.default(503, 'We could not confirm prices just now. Please try again in a moment.');
         }
     }
     const doc = new order_model_1.Order(payload);
@@ -288,9 +301,11 @@ const addItemsToOrder = (id, business_id, newItems) => __awaiter(void 0, void 0,
         priceMap = yield catalogPriceMap(newItems.map((it) => it.productId || it.product_id || it._id).filter(Boolean), business_id);
     }
     catch (e) {
-        // A catalog lookup failure must not block food reaching the kitchen; fall
-        // back to the submitted prices, clamped, exactly as createOrder does.
+        // Same rule as createOrder: an unpriced line must not be billed at whatever
+        // the caller sent. Malformed ids are filtered before the query, so reaching
+        // here means the lookup itself failed.
         console.error('[order] add-items price lookup failed:', e === null || e === void 0 ? void 0 : e.message);
+        throw new AppError_1.default(503, 'We could not confirm prices just now. Please try again in a moment.');
     }
     // Append new items
     const itemsToAdd = newItems.map(item => {
@@ -358,7 +373,16 @@ const updateOrderItemKitchenStatus = (orderId, itemId, business_id, status) => _
     return order;
 });
 exports.updateOrderItemKitchenStatus = updateOrderItemKitchenStatus;
-const listOrders = (_a) => __awaiter(void 0, [_a], void 0, function* ({ business_id, user_id, status, }) {
+// This returned every order a business had ever taken, with all its nested
+// items, on every dashboard load — no date range and no limit. That gets
+// slower every week for as long as the restaurant stays open.
+//
+// `from`/`to` and `limit` are optional and the behaviour with none of them is
+// exactly what it was, because the dashboard sums these rows to show revenue:
+// silently truncating the list would have quietly changed the money on screen.
+// Callers opt in to a window instead, and the screens now do.
+const MAX_ORDER_PAGE = 2000;
+const listOrders = (_a) => __awaiter(void 0, [_a], void 0, function* ({ business_id, user_id, status, from, to, limit, }) {
     const q = {};
     if (business_id)
         q.business_id = business_id;
@@ -366,7 +390,23 @@ const listOrders = (_a) => __awaiter(void 0, [_a], void 0, function* ({ business
         q.user_id = user_id;
     if (status)
         q.status = status;
-    return order_model_1.Order.find(q).sort({ createdAt: -1 });
+    const range = {};
+    const fromDate = from ? new Date(String(from)) : null;
+    const toDate = to ? new Date(String(to)) : null;
+    if (fromDate && !Number.isNaN(fromDate.getTime()))
+        range.$gte = fromDate;
+    if (toDate && !Number.isNaN(toDate.getTime()))
+        range.$lte = toDate;
+    if (Object.keys(range).length)
+        q.createdAt = range;
+    const query = order_model_1.Order.find(q).sort({ createdAt: -1 });
+    // A caller that asks for a limit gets one, clamped. A caller that asks for
+    // nothing still gets everything in the window it requested.
+    const asked = Number(limit);
+    if (Number.isFinite(asked) && asked > 0) {
+        query.limit(Math.min(Math.floor(asked), MAX_ORDER_PAGE));
+    }
+    return query;
 });
 exports.listOrders = listOrders;
 const getOrderById = (id, business_id) => __awaiter(void 0, void 0, void 0, function* () {
@@ -417,7 +457,10 @@ const updateOrder = (id, business_id, updates) => __awaiter(void 0, void 0, void
             });
         }
         catch (e) {
+            // Same rule again: no line gets billed at a price the server has not
+            // read from the catalog itself.
             console.error('[order] update price re-read failed:', e === null || e === void 0 ? void 0 : e.message);
+            throw new AppError_1.default(503, 'We could not confirm prices just now. Please try again in a moment.');
         }
         // VOIDED lines stay in the array for audit but are not billed — the same
         // rule the void-approval path applies to the rollups.

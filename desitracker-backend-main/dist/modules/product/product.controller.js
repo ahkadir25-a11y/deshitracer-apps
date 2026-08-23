@@ -41,9 +41,15 @@ var __awaiter = (this && this.__awaiter) || function (thisArg, _arguments, P, ge
         step((generator = generator.apply(thisArg, _arguments || [])).next());
     });
 };
+var __importDefault = (this && this.__importDefault) || function (mod) {
+    return (mod && mod.__esModule) ? mod : { "default": mod };
+};
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.ProductControllers = void 0;
 const productService = __importStar(require("./product.service"));
+const dayOffer_model_1 = require("./dayOffer.model");
+const businessAccess_1 = require("../../utils/lib/businessAccess");
+const product_model_1 = __importDefault(require("./product.model"));
 function validateDiscount(discount, res) {
     if (discount === undefined || discount === null)
         return true;
@@ -124,6 +130,12 @@ const editProduct = (req, res) => __awaiter(void 0, void 0, void 0, function* ()
     try {
         const { productId } = req.params;
         const updateData = req.body;
+        // The route only proved the caller is *a* business user. Prove this
+        // product is theirs before touching it, and never let the body decide
+        // which business it belongs to.
+        yield (0, businessAccess_1.assertOwnsRecord)(req, yield product_model_1.default.findById(productId).select('business_id').lean(), 'Product not found');
+        delete updateData.business_id;
+        delete updateData.user_id;
         // ❌ This used to early-return and do nothing if images is an array.
         // if (updateData.images && Array.isArray(updateData.images)) return;
         if (!validateDiscount(updateData.discount_percent, res))
@@ -145,18 +157,23 @@ const editProduct = (req, res) => __awaiter(void 0, void 0, void 0, function* ()
         }
     }
     catch (error) {
-        res.status(500).json({ error: 'Failed to edit product' });
+        // An authorization refusal carries its own status; only genuine faults
+        // are a 500.
+        const status = Number(error === null || error === void 0 ? void 0 : error.statusCode) || 500;
+        res.status(status).json({ error: status === 500 ? 'Failed to edit product' : error.message });
     }
 });
 // Delete a product
 const deleteProduct = (req, res) => __awaiter(void 0, void 0, void 0, function* () {
     try {
         const { productId } = req.params;
+        yield (0, businessAccess_1.assertOwnsRecord)(req, yield product_model_1.default.findById(productId).select('business_id').lean(), 'Product not found');
         const result = yield productService.deleteProduct(productId);
         res.status(200).json(result);
     }
     catch (error) {
-        res.status(500).json({ error: 'Failed to delete product' });
+        const status = Number(error === null || error === void 0 ? void 0 : error.statusCode) || 500;
+        res.status(status).json({ error: status === 500 ? 'Failed to delete product' : error.message });
     }
 });
 // Get all products by user and business
@@ -370,6 +387,9 @@ const updateDayOffer = (req, res) => __awaiter(void 0, void 0, void 0, function*
         if (req.body.product_category_id !== undefined) {
             updates.product_category_id = req.body.product_category_id || undefined;
         }
+        // Unguarded, this let anyone set another restaurant's day offer to 100%
+        // off — the same free-food outcome by a different door.
+        yield (0, businessAccess_1.assertOwnsRecord)(req, yield dayOffer_model_1.DayOffer.findById(req.params.id).select('business_id').lean(), 'Day offer not found');
         const updated = yield productService.updateDayOffer(req.params.id, updates);
         if (!updated) {
             res.status(404).json({ error: 'Day offer not found' });
@@ -388,6 +408,7 @@ const updateDayOffer = (req, res) => __awaiter(void 0, void 0, void 0, function*
 // Delete
 const deleteDayOffer = (req, res) => __awaiter(void 0, void 0, void 0, function* () {
     try {
+        yield (0, businessAccess_1.assertOwnsRecord)(req, yield dayOffer_model_1.DayOffer.findById(req.params.id).select('business_id').lean(), 'Day offer not found');
         const result = yield productService.deleteDayOffer(req.params.id);
         res.status(200).json(result);
     }

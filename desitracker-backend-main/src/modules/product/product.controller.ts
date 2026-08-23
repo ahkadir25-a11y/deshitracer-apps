@@ -1,6 +1,8 @@
 import { Request, Response } from 'express';
 import * as productService from './product.service';
-import { Weekday } from './dayOffer.model';
+import { Weekday, DayOffer } from './dayOffer.model';
+import { assertOwnsRecord } from '../../utils/lib/businessAccess';
+import Product from './product.model';
 function validateDiscount(discount: any, res: Response): boolean {
   if (discount === undefined || discount === null) return true;
   const n = Number(discount);
@@ -106,6 +108,13 @@ const editProduct = async (req: Request, res: Response) => {
     const { productId } = req.params;
     const updateData = req.body;
 
+    // The route only proved the caller is *a* business user. Prove this
+    // product is theirs before touching it, and never let the body decide
+    // which business it belongs to.
+    await assertOwnsRecord(req, await Product.findById(productId).select('business_id').lean(), 'Product not found');
+    delete updateData.business_id;
+    delete updateData.user_id;
+
     // ❌ This used to early-return and do nothing if images is an array.
     // if (updateData.images && Array.isArray(updateData.images)) return;
 
@@ -125,8 +134,11 @@ const editProduct = async (req: Request, res: Response) => {
     } else {
       res.status(404).json({ error: 'Product not found' });
     }
-  } catch (error) {
-    res.status(500).json({ error: 'Failed to edit product' });
+  } catch (error: any) {
+    // An authorization refusal carries its own status; only genuine faults
+    // are a 500.
+    const status = Number(error?.statusCode) || 500;
+    res.status(status).json({ error: status === 500 ? 'Failed to edit product' : error.message });
   }
 };
 
@@ -134,10 +146,12 @@ const editProduct = async (req: Request, res: Response) => {
 const deleteProduct = async (req: Request, res: Response) => {
   try {
     const { productId } = req.params;
+    await assertOwnsRecord(req, await Product.findById(productId).select('business_id').lean(), 'Product not found');
     const result = await productService.deleteProduct(productId);
     res.status(200).json(result);
-  } catch (error) {
-    res.status(500).json({ error: 'Failed to delete product' });
+  } catch (error: any) {
+    const status = Number(error?.statusCode) || 500;
+    res.status(status).json({ error: status === 500 ? 'Failed to delete product' : error.message });
   }
 };
 
@@ -368,6 +382,9 @@ const updateDayOffer = async (req: Request, res: Response): Promise<void> => {
       updates.product_category_id = req.body.product_category_id || undefined;
     }
 
+    // Unguarded, this let anyone set another restaurant's day offer to 100%
+    // off — the same free-food outcome by a different door.
+    await assertOwnsRecord(req, await DayOffer.findById(req.params.id as string).select('business_id').lean(), 'Day offer not found');
     const updated = await productService.updateDayOffer((req.params.id as string), updates);
     if (!updated) { res.status(404).json({ error: 'Day offer not found' }); return; }
     res.status(200).json(updated);
@@ -380,6 +397,7 @@ const updateDayOffer = async (req: Request, res: Response): Promise<void> => {
 // Delete
 const deleteDayOffer = async (req: Request, res: Response): Promise<void> => {
   try {
+    await assertOwnsRecord(req, await DayOffer.findById(req.params.id as string).select('business_id').lean(), 'Day offer not found');
     const result = await productService.deleteDayOffer((req.params.id as string));
     res.status(200).json(result);
   } catch (err: any) {

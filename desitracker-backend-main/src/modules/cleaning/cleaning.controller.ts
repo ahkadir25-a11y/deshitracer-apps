@@ -1,6 +1,33 @@
 import { Request, Response } from 'express';
 import cleaningService from './cleaning.service';
 import { canAccessUserScopedData } from '../../utils/lib/businessAccess';
+import CleaningTask from './cleaning.model';
+
+// The GET routes here were guarded against cross-tenant reads but the writes
+// were not, so any authenticated staff member could create tasks under another
+// business or falsify its cleaning records. These are food-safety logs; a
+// forged entry is a compliance problem, not just bad data.
+const denyIfNotAllowed = async (req: Request, res: Response, targetUserId: any): Promise<boolean> => {
+  const caller = (req as any).user;
+  const allowed = await canAccessUserScopedData(
+    caller?.id,
+    caller?.role,
+    targetUserId ? String(targetUserId) : undefined,
+    caller?.email,
+  );
+  if (!allowed) {
+    res.status(403).json({ message: 'You are not authorized to change this data' });
+    return true;
+  }
+  return false;
+};
+
+// A log is written against a task id, so the owner has to be read off the task
+// itself — the caller does not get to say whose record this is.
+const ownerOfTask = async (taskId: any): Promise<string | undefined> => {
+  const task = await CleaningTask.findById(String(taskId || '')).select('userId').lean();
+  return (task as any)?.userId ? String((task as any).userId) : undefined;
+};
 
 const getErrorMessage = (err: unknown): string => {
   if (err instanceof Error) return err.message;
@@ -13,6 +40,7 @@ class CleaningController {
   public async createTask(req: Request, res: Response): Promise<void> {
     try {
       const { userId, taskName, area, frequency, intervalDays } = req.body;
+      if (await denyIfNotAllowed(req, res, userId)) return;
       const task = await cleaningService.createTask(
         userId,
         taskName,
@@ -30,6 +58,7 @@ class CleaningController {
   public async addLog(req: Request, res: Response): Promise<void> {
     try {
       const { taskId, completedBy, notes, photoUrl, date } = req.body;
+      if (await denyIfNotAllowed(req, res, await ownerOfTask(taskId))) return;
       const updated = await cleaningService.addLog(taskId, completedBy, notes, photoUrl, date);
       res.status(200).json(updated);
     } catch (error: unknown) {
@@ -41,6 +70,7 @@ class CleaningController {
   public async editLog(req: Request, res: Response): Promise<void> {
     try {
       const { taskId, logId, notes, photoUrl } = req.body;
+      if (await denyIfNotAllowed(req, res, await ownerOfTask(taskId))) return;
       const updated = await cleaningService.editLog(taskId, logId, notes, photoUrl);
       res.status(200).json(updated);
     } catch (error: unknown) {

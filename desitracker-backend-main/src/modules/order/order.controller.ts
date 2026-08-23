@@ -78,10 +78,13 @@ const createOrder = async (req: Request, res: Response) => {
 
 const listOrders = async (req: Request, res: Response) => {
   try {
-    const { business_id, user_id, status } = (req.query as any) as {
+    const { business_id, user_id, status, from, to, limit } = (req.query as any) as {
       business_id?: string;
       user_id?: string;
       status?: string;
+      from?: string;
+      to?: string;
+      limit?: string;
     };
 
     // Allow listing by business (staff/owner view) OR by user (a member's
@@ -92,7 +95,7 @@ const listOrders = async (req: Request, res: Response) => {
       return;
     }
 
-    const items = await orderService.listOrders({ business_id, user_id, status });
+    const items = await orderService.listOrders({ business_id, user_id, status, from, to, limit });
     res.status(200).json(items);
   } catch (err: any) {
     res.status(500).json({ error: err?.message || "Failed to fetch orders" });

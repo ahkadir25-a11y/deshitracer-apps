@@ -3,6 +3,8 @@ import httpStatus from 'http-status';
 import handleAsyncRequest from '../../utils/handleAsyncRequest';
 import sendResponse from '../../utils/sendResponse';
 import { InventoryServices } from './inventory.service';
+import { Ingredient } from './inventory.model';
+import { assertOwnsRecord } from '../../utils/lib/businessAccess';
 
 const createIngredient = handleAsyncRequest(async (req: Request, res: Response) => {
   const result = await InventoryServices.createIngredient(req.body);
@@ -53,6 +55,10 @@ const getStockHistory = handleAsyncRequest(async (req: Request, res: Response) =
 });
 
 const updateIngredient = handleAsyncRequest(async (req: Request, res: Response) => {
+  // The route proves only that the caller holds a business role somewhere.
+  // Prove this ingredient is theirs, and stop the body re-homing it.
+  await assertOwnsRecord(req, await Ingredient.findById(req.params.ingredientId).select('business').lean(), 'Ingredient not found');
+  delete (req.body as any).business;
   const result = await InventoryServices.updateIngredient(req.params.ingredientId, req.body);
   sendResponse(res, {
     statusCode: httpStatus.OK,
@@ -63,6 +69,7 @@ const updateIngredient = handleAsyncRequest(async (req: Request, res: Response) 
 });
 
 const deleteIngredient = handleAsyncRequest(async (req: Request, res: Response) => {
+  await assertOwnsRecord(req, await Ingredient.findById(req.params.ingredientId).select('business').lean(), 'Ingredient not found');
   const result = await InventoryServices.deleteIngredient(req.params.ingredientId);
   sendResponse(res, {
     statusCode: httpStatus.OK,

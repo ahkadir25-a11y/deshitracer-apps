@@ -18,9 +18,32 @@ const registerUser = handleAsyncRequest(async (req: Request, res: Response) => {
 });
 
 // Get User Detail
+// Any signed-in user could fetch any other user's full record here, which put
+// the whole user base's emails and phone numbers one loop away from being
+// harvested. The route is left reachable because callers legitimately need to
+// resolve a name from an id; what changes is that contact details are stripped
+// unless the caller is that user or an admin.
+const PUBLIC_USER_FIELDS = ['_id', 'name', 'role', 'image', 'profileImage', 'createdAt'];
+
+const stripPII = (doc: any) => {
+  const src = typeof doc?.toObject === 'function' ? doc.toObject() : doc;
+  if (!src) return src;
+  const out: Record<string, unknown> = {};
+  for (const key of PUBLIC_USER_FIELDS) {
+    if (src[key] !== undefined) out[key] = src[key];
+  }
+  return out;
+};
+
 const getUserDetails = handleAsyncRequest(
   async (req: Request, res: Response) => {
-    const result = await UserServices.getUserDetails((req.params?.id as string));
+    const targetId = String(req.params?.id ?? '');
+    const full = await UserServices.getUserDetails(targetId);
+
+    const caller = (req as any).user;
+    const isSelf = caller?.id && String(caller.id) === targetId;
+    const isAdmin = String(caller?.role) === 'admin';
+    const result = isSelf || isAdmin ? full : stripPII(full);
 
     sendResponse(res, {
       success: true,

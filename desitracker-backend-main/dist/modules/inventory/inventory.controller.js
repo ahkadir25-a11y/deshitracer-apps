@@ -17,6 +17,8 @@ const http_status_1 = __importDefault(require("http-status"));
 const handleAsyncRequest_1 = __importDefault(require("../../utils/handleAsyncRequest"));
 const sendResponse_1 = __importDefault(require("../../utils/sendResponse"));
 const inventory_service_1 = require("./inventory.service");
+const inventory_model_1 = require("./inventory.model");
+const businessAccess_1 = require("../../utils/lib/businessAccess");
 const createIngredient = (0, handleAsyncRequest_1.default)((req, res) => __awaiter(void 0, void 0, void 0, function* () {
     const result = yield inventory_service_1.InventoryServices.createIngredient(req.body);
     (0, sendResponse_1.default)(res, {
@@ -55,6 +57,10 @@ const getStockHistory = (0, handleAsyncRequest_1.default)((req, res) => __awaite
     });
 }));
 const updateIngredient = (0, handleAsyncRequest_1.default)((req, res) => __awaiter(void 0, void 0, void 0, function* () {
+    // The route proves only that the caller holds a business role somewhere.
+    // Prove this ingredient is theirs, and stop the body re-homing it.
+    yield (0, businessAccess_1.assertOwnsRecord)(req, yield inventory_model_1.Ingredient.findById(req.params.ingredientId).select('business').lean(), 'Ingredient not found');
+    delete req.body.business;
     const result = yield inventory_service_1.InventoryServices.updateIngredient(req.params.ingredientId, req.body);
     (0, sendResponse_1.default)(res, {
         statusCode: http_status_1.default.OK,
@@ -64,6 +70,7 @@ const updateIngredient = (0, handleAsyncRequest_1.default)((req, res) => __await
     });
 }));
 const deleteIngredient = (0, handleAsyncRequest_1.default)((req, res) => __awaiter(void 0, void 0, void 0, function* () {
+    yield (0, businessAccess_1.assertOwnsRecord)(req, yield inventory_model_1.Ingredient.findById(req.params.ingredientId).select('business').lean(), 'Ingredient not found');
     const result = yield inventory_service_1.InventoryServices.deleteIngredient(req.params.ingredientId);
     (0, sendResponse_1.default)(res, {
         statusCode: http_status_1.default.OK,

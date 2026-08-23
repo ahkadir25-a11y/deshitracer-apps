@@ -97,7 +97,7 @@ const createOrder = (req, res) => __awaiter(void 0, void 0, void 0, function* ()
 });
 const listOrders = (req, res) => __awaiter(void 0, void 0, void 0, function* () {
     try {
-        const { business_id, user_id, status } = req.query;
+        const { business_id, user_id, status, from, to, limit } = req.query;
         // Allow listing by business (staff/owner view) OR by user (a member's
         // own order history across businesses). At least one scope is required
         // so we never return the whole orders collection.
@@ -105,7 +105,7 @@ const listOrders = (req, res) => __awaiter(void 0, void 0, void 0, function* () 
             res.status(400).json({ error: "business_id or user_id is required." });
             return;
         }
-        const items = yield orderService.listOrders({ business_id, user_id, status });
+        const items = yield orderService.listOrders({ business_id, user_id, status, from, to, limit });
         res.status(200).json(items);
     }
     catch (err) {

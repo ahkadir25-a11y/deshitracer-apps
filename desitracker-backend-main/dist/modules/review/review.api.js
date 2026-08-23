@@ -20,5 +20,16 @@ router.get('/:reviewId', review_controller_1.ReviewControllers.getSingleReview);
 // Update review visibility
 router.put('/:reviewId/visibility', (0, auth_1.default)(auth_constants_1.USER_ROLE.ADMIN), // Only admins can update review visibility
 review_controller_1.ReviewControllers.updateReviewVisibility);
-router.put('/:reviewId', review_controller_1.ReviewControllers.updateReviewByReviewer);
+// Editing a review's rating and text.
+//
+// This route carried no auth middleware at all, so anyone on the internet who
+// knew a review id could rewrite its stars and its wording — turning a
+// restaurant's five-star reviews into one-star ones without logging in.
+//
+// Admin-only, matching the visibility route above. It cannot be scoped to the
+// reviewer instead, because a review records only an email and the `user`
+// field on the model is commented out, so there is nobody to check the caller
+// against. Nothing in the app calls this endpoint (it only creates reviews and
+// lists them), so requiring admin breaks no existing screen.
+router.put('/:reviewId', (0, auth_1.default)(auth_constants_1.USER_ROLE.ADMIN), review_controller_1.ReviewControllers.updateReviewByReviewer);
 exports.ReviewRoutes = router;

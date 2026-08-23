@@ -3,6 +3,8 @@ import httpStatus from 'http-status';
 import handleAsyncRequest from '../../utils/handleAsyncRequest';
 import sendResponse from '../../utils/sendResponse';
 import { DineInServices } from './dinein.service';
+import { DineInTable } from './dinein.model';
+import { assertOwnsRecord } from '../../utils/lib/businessAccess';
 
 const createTable = handleAsyncRequest(async (req: Request, res: Response) => {
   const result = await DineInServices.createTable(req.body);
@@ -25,6 +27,8 @@ const getTablesByBusiness = handleAsyncRequest(async (req: Request, res: Respons
 });
 
 const updateTable = handleAsyncRequest(async (req: Request, res: Response) => {
+  await assertOwnsRecord(req, await DineInTable.findById(req.params.tableId as string).select('business').lean(), 'Table not found');
+  delete (req.body as any).business;
   const result = await DineInServices.updateTable(req.params.tableId as string, req.body);
   sendResponse(res, {
     statusCode: httpStatus.OK,
@@ -35,6 +39,7 @@ const updateTable = handleAsyncRequest(async (req: Request, res: Response) => {
 });
 
 const deleteTable = handleAsyncRequest(async (req: Request, res: Response) => {
+  await assertOwnsRecord(req, await DineInTable.findById(req.params.tableId as string).select('business').lean(), 'Table not found');
   const result = await DineInServices.deleteTable(req.params.tableId as string);
   sendResponse(res, {
     statusCode: httpStatus.OK,

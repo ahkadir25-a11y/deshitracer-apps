@@ -14,6 +14,24 @@ var __importDefault = (this && this.__importDefault) || function (mod) {
 Object.defineProperty(exports, "__esModule", { value: true });
 const fridge_service_1 = __importDefault(require("./fridge.service"));
 const businessAccess_1 = require("../../utils/lib/businessAccess");
+const fridge_model_1 = __importDefault(require("./fridge.model"));
+// Reads were guarded against cross-tenant access; writes were not. Temperature
+// logs are HACCP records, so a fabricated entry in a rival's log is a
+// compliance problem rather than merely wrong data.
+const denyIfNotAllowed = (req, res, targetUserId) => __awaiter(void 0, void 0, void 0, function* () {
+    const caller = req.user;
+    const allowed = yield (0, businessAccess_1.canAccessUserScopedData)(caller === null || caller === void 0 ? void 0 : caller.id, caller === null || caller === void 0 ? void 0 : caller.role, targetUserId ? String(targetUserId) : undefined, caller === null || caller === void 0 ? void 0 : caller.email);
+    if (!allowed) {
+        res.status(403).json({ message: 'You are not authorized to change this data' });
+        return true;
+    }
+    return false;
+});
+// Records are written against a fridge id, so the owner is read off the fridge.
+const ownerOfFridge = (fridgeId) => __awaiter(void 0, void 0, void 0, function* () {
+    const fridge = yield fridge_model_1.default.findById(String(fridgeId || '')).select('userId').lean();
+    return (fridge === null || fridge === void 0 ? void 0 : fridge.userId) ? String(fridge.userId) : undefined;
+});
 const getErrorMessage = (err) => {
     if (err instanceof Error)
         return err.message;
@@ -27,6 +45,8 @@ class FridgeController {
         return __awaiter(this, void 0, void 0, function* () {
             try {
                 const { userId, fridgeName, fridgeLocation } = req.body;
+                if (yield denyIfNotAllowed(req, res, userId))
+                    return;
                 const fridge = yield fridge_service_1.default.createFridge(userId, fridgeName, fridgeLocation);
                 res.status(201).json(fridge);
             }
@@ -40,6 +60,8 @@ class FridgeController {
         return __awaiter(this, void 0, void 0, function* () {
             try {
                 const { fridgeId, minTemperature, maxTemperature, date } = req.body; // include date
+                if (yield denyIfNotAllowed(req, res, yield ownerOfFridge(fridgeId)))
+                    return;
                 const updatedFridge = yield fridge_service_1.default.addTemperatureRecord(fridgeId, minTemperature, maxTemperature, date);
                 res.status(200).json(updatedFridge);
             }
@@ -53,6 +75,8 @@ class FridgeController {
         return __awaiter(this, void 0, void 0, function* () {
             try {
                 const { fridgeId, recordId, minTemperature, maxTemperature } = req.body;
+                if (yield denyIfNotAllowed(req, res, yield ownerOfFridge(fridgeId)))
+                    return;
                 const updatedFridge = yield fridge_service_1.default.editTemperatureRecord(fridgeId, recordId, minTemperature, maxTemperature);
                 res.status(200).json(updatedFridge);
             }

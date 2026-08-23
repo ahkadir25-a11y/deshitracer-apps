@@ -14,6 +14,26 @@ var __importDefault = (this && this.__importDefault) || function (mod) {
 Object.defineProperty(exports, "__esModule", { value: true });
 const cleaning_service_1 = __importDefault(require("./cleaning.service"));
 const businessAccess_1 = require("../../utils/lib/businessAccess");
+const cleaning_model_1 = __importDefault(require("./cleaning.model"));
+// The GET routes here were guarded against cross-tenant reads but the writes
+// were not, so any authenticated staff member could create tasks under another
+// business or falsify its cleaning records. These are food-safety logs; a
+// forged entry is a compliance problem, not just bad data.
+const denyIfNotAllowed = (req, res, targetUserId) => __awaiter(void 0, void 0, void 0, function* () {
+    const caller = req.user;
+    const allowed = yield (0, businessAccess_1.canAccessUserScopedData)(caller === null || caller === void 0 ? void 0 : caller.id, caller === null || caller === void 0 ? void 0 : caller.role, targetUserId ? String(targetUserId) : undefined, caller === null || caller === void 0 ? void 0 : caller.email);
+    if (!allowed) {
+        res.status(403).json({ message: 'You are not authorized to change this data' });
+        return true;
+    }
+    return false;
+});
+// A log is written against a task id, so the owner has to be read off the task
+// itself — the caller does not get to say whose record this is.
+const ownerOfTask = (taskId) => __awaiter(void 0, void 0, void 0, function* () {
+    const task = yield cleaning_model_1.default.findById(String(taskId || '')).select('userId').lean();
+    return (task === null || task === void 0 ? void 0 : task.userId) ? String(task.userId) : undefined;
+});
 const getErrorMessage = (err) => {
     if (err instanceof Error)
         return err.message;
@@ -27,6 +47,8 @@ class CleaningController {
         return __awaiter(this, void 0, void 0, function* () {
             try {
                 const { userId, taskName, area, frequency, intervalDays } = req.body;
+                if (yield denyIfNotAllowed(req, res, userId))
+                    return;
                 const task = yield cleaning_service_1.default.createTask(userId, taskName, area, frequency, intervalDays != null ? Number(intervalDays) : null);
                 res.status(201).json(task);
             }
@@ -40,6 +62,8 @@ class CleaningController {
         return __awaiter(this, void 0, void 0, function* () {
             try {
                 const { taskId, completedBy, notes, photoUrl, date } = req.body;
+                if (yield denyIfNotAllowed(req, res, yield ownerOfTask(taskId)))
+                    return;
                 const updated = yield cleaning_service_1.default.addLog(taskId, completedBy, notes, photoUrl, date);
                 res.status(200).json(updated);
             }
@@ -53,6 +77,8 @@ class CleaningController {
         return __awaiter(this, void 0, void 0, function* () {
             try {
                 const { taskId, logId, notes, photoUrl } = req.body;
+                if (yield denyIfNotAllowed(req, res, yield ownerOfTask(taskId)))
+                    return;
                 const updated = yield cleaning_service_1.default.editLog(taskId, logId, notes, photoUrl);
                 res.status(200).json(updated);
             }
