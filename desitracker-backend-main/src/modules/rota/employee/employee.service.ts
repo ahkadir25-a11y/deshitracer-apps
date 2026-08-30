@@ -16,7 +16,12 @@ import { JwtHelpers, TJwtPayload } from '../../../utils/jwt';
 
 async function ensureRole(roleId: string, business: string) {
   const role = await RotaRole.findOne({ _id: roleId, business, isDeleted: false, isActive: true });
-  if (!role) throw new AppError(400, 'Invalid role for this business');
+  if (!role) {
+    throw new AppError(
+      400,
+      'That role is not available for this business. It may have been deleted or turned off — pick another role.',
+    );
+  }
   return role;
 }
 
@@ -223,14 +228,19 @@ export const RotaEmployeeService = {
       const fullName = `${employee.firstName} ${employee.lastName || ''}`.trim();
       // Phone is required + isMobilePhone-validated on User. Prefer the phone
       // submitted in the accept form, fall back to whatever the owner saved on
-      // the employee record. Use a deterministic UK test-range placeholder
-      // (always passes isMobilePhone in 'any' locale) only as a last resort
-      // so we never reject a legitimate accept just because the owner didn't
-      // enter a phone.
-      const phone =
-        submittedPhone
-        || (employee.phone && employee.phone.trim())
-        || `+447700${String(Date.now()).slice(-6)}`;
+      // the employee record.
+      //
+      // There used to be a third fallback here: a generated +447700 UK
+      // test-range number, so an accept was never rejected for a missing phone.
+      // The cost landed on the staff member, who then saw a number they had
+      // never given sitting on their own profile with nothing marking it as
+      // invented — so it was never corrected. The accept form now asks for a
+      // phone, which makes the placeholder unnecessary; say what is missing
+      // instead of inventing it.
+      const phone = submittedPhone || (employee.phone && employee.phone.trim());
+      if (!phone) {
+        throw new AppError(400, 'A phone number is required to finish setting up your account.');
+      }
 
       userDoc = await User.create({
         name: fullName || email,
@@ -271,7 +281,7 @@ export const RotaEmployeeService = {
     const allFalse: any = {};
     for (const key of PERMISSION_KEYS) allFalse[key] = false;
 
-    if (userRole === 'business_owner' || userRole === 'admin') {
+    if (userRole === 'business_owner' || userRole === 'business' || userRole === 'owner' || userRole === 'admin') {
       const owner: any = {};
       for (const key of PERMISSION_KEYS) owner[key] = true;
       // Include the owner's business so the client has a businessId to join the
@@ -289,7 +299,11 @@ export const RotaEmployeeService = {
       };
     }
 
-    const employee = await RotaEmployee.findOne({ user: userId, isDeleted: false })
+    // Shifts, leave and timesheets all scope to status ACTIVE; permissions did
+    // not, so switching someone to INACTIVE took them off the rota and left
+    // every one of their permissions intact. Deactivating has to mean it here
+    // too, or it does not mean anything.
+    const employee = await RotaEmployee.findOne({ user: userId, isDeleted: false, status: 'ACTIVE' })
       .populate('business', 'businessName slug logo owner');
     if (!employee) {
       return { permissions: allFalse, source: 'none', employee: null, role: null, business: null };
@@ -406,7 +420,21 @@ export const RotaEmployeeService = {
   async update(id: string, business: string, payload: any) {
     const dto = RotaEmployeeValidation.update(payload);
 
-    if (dto.role) await ensureRole(dto.role, business);
+    // Only validate the role when it is actually CHANGING. The edit form posts
+    // the whole employee back, so an unchanged role was re-validated on every
+    // save — and if that role had since been deactivated or deleted, the owner
+    // could no longer edit the employee at all. Re-activating someone failed
+    // with 'Invalid role for this business', which named neither the employee's
+    // real problem nor anything the owner could act on.
+    if (dto.role) {
+      const current = await RotaEmployee.findOne({ _id: id, business, isDeleted: false })
+        .select('role')
+        .lean();
+      if (!current) throw new AppError(404, 'Employee not found');
+      if (String(current.role || '') !== String(dto.role)) {
+        await ensureRole(dto.role, business);
+      }
+    }
 
     try {
       const doc = await RotaEmployee.findOneAndUpdate(
