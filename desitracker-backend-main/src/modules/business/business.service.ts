@@ -15,7 +15,47 @@ import { Business } from './business.model';
 import { getBusinessApprovedTemplate } from './business.template';
 import { cleanupBusinessRelations } from '../../utils/lib/cascadeCleanup';
 
+// Fill the country-neutral location fields from whatever the country actually
+// sent, and turn a coordinate pair into the GeoJSON point the database can
+// index. Runs on create and on update, and only ever ADDS: every named field
+// the caller sent is left exactly as it arrived.
+//
+// Nothing here invents data. A missing or out-of-range coordinate leaves `geo`
+// alone rather than storing a point in the Gulf of Guinea, which is where
+// (0, 0) puts a business that never gave one.
+const normaliseLocation = (payload: any) => {
+  const loc = payload?.locations;
+  if (!loc || typeof loc !== 'object') return payload;
+
+  // The region tier under its local names: division in Bangladesh, a county in
+  // the UK, a state in Brazil. Whichever arrived becomes `region` too.
+  if (!loc.region) {
+    const region = loc.region || loc.division || loc.state;
+    if (region) loc.region = region;
+  }
+
+  // Coordinates arrive as strings from the form.
+  const lat = Number(loc.lat);
+  const lng = Number(loc.long);
+  const usable =
+    Number.isFinite(lat) &&
+    Number.isFinite(lng) &&
+    Math.abs(lat) <= 90 &&
+    Math.abs(lng) <= 180 &&
+    !(lat === 0 && lng === 0);
+
+  if (usable && !loc.geo) {
+    // GeoJSON is [longitude, latitude] — the reverse of how it is spoken.
+    loc.geo = { type: 'Point', coordinates: [lng, lat] };
+    if (!loc.geoSource) loc.geoSource = 'device';
+  }
+
+  return payload;
+};
+
 const registerBusiness = async (payload: TBusiness) => {
+  normaliseLocation(payload);
+
   if (!payload?.businessName) {
     throw new AppError(400, 'Business name is required');
   }
@@ -28,6 +68,21 @@ const registerBusiness = async (payload: TBusiness) => {
 
   if (!isOwner) {
     throw new AppError(404, 'Business Owner is not found.');
+  }
+
+  // One owner, one business. The app assumes this everywhere — the dashboard
+  // loads the owner's FIRST business and has no way to switch, so a second one
+  // is invisible while its staff, orders and takings quietly belong to a
+  // business the owner cannot see.
+  const existing = await Business.findOne({
+    owner: payload.owner,
+    isDeleted: false,
+  }).select('_id businessName');
+  if (existing) {
+    throw new AppError(
+      409,
+      `This account already has a business (${existing.businessName}). Each account can register one business.`,
+    );
   }
 
   const slug = stringToSlug(payload.businessName);
@@ -65,6 +120,8 @@ const updateBusiness = async (
   payload: Partial<TBusiness>,
   decodedUser: JwtPayload,
 ) => {
+  normaliseLocation(payload);
+
   const business = await Business.findOne({ slug });
   if (!business) {
     throw new AppError(404, `Business with slug ${slug} is not found`);
@@ -298,9 +355,35 @@ const getAllBusiness = async (query: Record<string, unknown>) => {
       query.onlineBookingLink;
 
   // Location
+  //
+  // The region tier goes by three names. The app has always sent `state`, the
+  // schema has always stored `division`, and neither is the right word for a
+  // UK county or a Brazilian state — so `region` is the country-neutral one.
+  // All three query names are accepted, and any of them matches a business
+  // that recorded the value under any of the three, because until now the
+  // filter looked only at `locations.state`, a field the schema did not
+  // define. It could never match a document, which is why the region step of
+  // the app's search always came back empty.
   if (query?.city) newQuery['locations.city'] = query.city;
-  if (query?.state) newQuery['locations.state'] = query.state;
   if (query?.country) newQuery['locations.country'] = query.country;
+
+  //
+  // Wrapped in $and, not a bare $or: QueryBuilder.search() already puts an
+  // $or on the query for searchTerm, and two $or keys on the same find would
+  // overwrite each other — silently breaking search for anyone who also
+  // filtered by region.
+  const regionValue = query?.region || query?.division || query?.state;
+  if (regionValue) {
+    newQuery['$and'] = [
+      {
+        $or: [
+          { 'locations.region': regionValue },
+          { 'locations.division': regionValue },
+          { 'locations.state': regionValue },
+        ],
+      },
+    ];
+  }
 
   // Pagination
   if (query?.page) newQuery.page = parseInt(query.page as string);

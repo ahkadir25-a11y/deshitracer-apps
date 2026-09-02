@@ -73,6 +73,38 @@ const LocationSchema = new mongoose_1.Schema({
     country: { type: String, required: true },
     isMultipleLocation: { type: Boolean, required: true },
     branches: { type: [BranchSchema], default: [] },
+    // These three were declared in TLocation but never defined here, and
+    // Mongoose runs strict:true — so every save dropped them without an error.
+    // The owner's form has always sent lat/long and the app has always filtered
+    // on state; neither could ever work. Defining them is what makes the data
+    // the rest of the location work depends on start existing.
+    state: { type: String },
+    lat: { type: String },
+    long: { type: String },
+    // Country-neutral tier, filled from whichever named field a country uses.
+    // Bangladesh puts its division here, the UK a county, Brazil a state.
+    locality: { type: String },
+    region: { type: String },
+    countryCode: { type: String },
+    // The geographic source of truth. Left undefined when unknown, so a sparse
+    // 2dsphere index skips a business without one rather than rejecting it.
+    // MongoDB's order is [longitude, latitude] — the reverse of how it is said.
+    geo: {
+        type: {
+            type: String,
+            enum: ['Point'],
+        },
+        coordinates: {
+            type: [Number],
+            default: undefined,
+        },
+    },
+    // How the point was obtained. A geocoded estimate must never be mistaken
+    // for a coordinate the owner actually confirmed.
+    geoSource: {
+        type: String,
+        enum: ['device', 'map', 'geocoded'],
+    },
 });
 const OperationDetailsSchema = new mongoose_1.Schema({
     provideHomeDelivery: { type: Boolean, default: false },
@@ -133,6 +165,11 @@ const BusinessSchema = new mongoose_1.Schema({
     coverPhotoUrl: { type: String },
     contactDetails: { type: ContactDetailsSchema, required: true },
     locations: { type: LocationSchema, required: true },
+    // One currency per business, derived from locations.country at
+    // registration and editable afterwards — every product's price and
+    // every order total for this business is shown in this currency,
+    // regardless of what was stored per-product before this field existed.
+    currency: { type: String, default: 'USD' },
     operationDetails: { type: OperationDetailsSchema, required: true },
     features: { type: FeaturesSchema, required: true },
     media: { type: MediaSchema, required: true },

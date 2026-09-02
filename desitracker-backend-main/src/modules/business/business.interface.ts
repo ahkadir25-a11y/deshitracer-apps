@@ -34,6 +34,20 @@ export type TLocation = {
   branches?: TBranch[];
   lat?: string;
   long?: string;
+
+  // Country-neutral tier. Bangladesh fills `division`, the UK a county, Brazil
+  // a state — `region` is whichever of those this country actually uses, so a
+  // query does not have to know the local vocabulary. The named fields above
+  // stay exactly as they are and keep being written.
+  locality?: string;
+  region?: string;
+  countryCode?: string;
+
+  // The geographic source of truth. [longitude, latitude] — GeoJSON order,
+  // which is the reverse of how people say it.
+  geo?: { type: 'Point'; coordinates: [number, number] };
+  // Where the point came from, so an estimate is never mistaken for a fact.
+  geoSource?: 'device' | 'map' | 'geocoded';
 };
 
 export type TOperationDetails = {
@@ -117,6 +131,7 @@ export type TBusiness = {
   coverPhotoUrl?: string;
   contactDetails: TContactDetails;
   locations: TLocation;
+  currency?: string;
   operationDetails: TOperationDetails;
   features: TFeatures;
   media: TMedia;
