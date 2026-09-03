@@ -83,7 +83,15 @@ export const deleteProduct = async (productId: string): Promise<{ message: strin
 
 // Get all products by user and business
 export const getProductsByUserAndBusiness = async (user_id: string, business_id: string): Promise<IProduct[]> => {
-  const products = await Product.find({ user_id, business_id }).sort({ createdAt: -1 });
+  // product_options_ids must be populated here, not just on the per-category
+  // route. Without it every dish looks like it has no choices at all, so the
+  // apps were forced to fan out one request per category just to see options
+  // — N requests on every menu load, growing with the category count.
+  // The option-group document is tiny ({ name, options[] }), so this costs
+  // very little and lets a caller load a whole menu in a single request.
+  const products = await Product.find({ user_id, business_id })
+    .populate('product_options_ids')
+    .sort({ createdAt: -1 });
   return products;
 };
 

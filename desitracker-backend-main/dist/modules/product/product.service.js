@@ -67,7 +67,15 @@ const deleteProduct = (productId) => __awaiter(void 0, void 0, void 0, function*
 exports.deleteProduct = deleteProduct;
 // Get all products by user and business
 const getProductsByUserAndBusiness = (user_id, business_id) => __awaiter(void 0, void 0, void 0, function* () {
-    const products = yield product_model_1.default.find({ user_id, business_id }).sort({ createdAt: -1 });
+    // product_options_ids must be populated here, not just on the per-category
+    // route. Without it every dish looks like it has no choices at all, so the
+    // apps were forced to fan out one request per category just to see options
+    // — N requests on every menu load, growing with the category count.
+    // The option-group document is tiny ({ name, options[] }), so this costs
+    // very little and lets a caller load a whole menu in a single request.
+    const products = yield product_model_1.default.find({ user_id, business_id })
+        .populate('product_options_ids')
+        .sort({ createdAt: -1 });
     return products;
 });
 exports.getProductsByUserAndBusiness = getProductsByUserAndBusiness;
