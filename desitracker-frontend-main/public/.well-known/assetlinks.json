@@ -1,0 +1,12 @@
+[
+  {
+    "relation": ["delegate_permission/common.handle_all_urls"],
+    "target": {
+      "namespace": "android_app",
+      "package_name": "com.desitracker.app",
+      "sha256_cert_fingerprints": [
+        "FF:C8:06:FF:95:DB:AE:D1:22:12:05:D8:08:E5:1D:31:35:B2:07:32:FA:53:28:03:C8:04:23:4B:85:88:CE:E5"
+      ]
+    }
+  }
+]
