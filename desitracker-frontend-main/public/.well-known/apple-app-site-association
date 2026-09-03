@@ -1,0 +1,12 @@
+{
+  "applinks": {
+    "apps": [],
+    "details": [
+      {
+        "appID": "2Q6ZBL3ZJ4.com.desitracker.app",
+        "appIDs": ["2Q6ZBL3ZJ4.com.desitracker.app"],
+        "paths": ["/business-details/*"]
+      }
+    ]
+  }
+}
