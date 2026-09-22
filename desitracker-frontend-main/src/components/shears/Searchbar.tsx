@@ -26,7 +26,7 @@ const Searchbar = ({ onChange }: { onChange: (e: string) => void }) => {
         aria-disabled="false"
         className={`flex gap-x-2 items-center font-poppins text-sm border ring-0 focus:outline-none border-gray-300 bg-white px-4 py-2 rounded whitespace-nowrap ${
           isVisible ? "border-[#017BFE]" : ""
-        }`}
+        } max-md:text-base`}
         onFocus={() => setIsVisible(true)}
         onChange={(e) => {
           onChange(e.target.value);

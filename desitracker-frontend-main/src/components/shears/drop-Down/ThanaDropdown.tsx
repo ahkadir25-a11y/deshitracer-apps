@@ -86,7 +86,7 @@ const ThanaDropdown: React.FC<ThanaDropdownProps> = ({
               placeholder="Search for a Thana"
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
-              className="w-full px-3 py-2 text-xs text-gray-700 bg-white border border-gray-200 rounded focus:outline-none focus:ring-1 focus:ring-blue-400"
+              className="w-full px-3 py-2 text-xs text-gray-700 bg-white border border-gray-200 rounded focus:outline-none focus:ring-1 focus:ring-blue-400 max-md:text-base"
             />
           </div>
           <ul className="max-h-52 overflow-y-auto text-left p-1 space-y-1">

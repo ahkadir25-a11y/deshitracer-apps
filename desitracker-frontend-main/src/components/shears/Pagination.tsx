@@ -44,7 +44,7 @@ function Pagination({
 
   return (
     <p className="flex gap-x-1 items-center">
-      <button
+      <button aria-label="Previous page"
         type="button"
         className="hover:bg-base/10 cursor-pointer px-2 py-1.5 rounded disabled:opacity-50"
         onClick={() => onPageChange(currentPage - 1)}
@@ -85,7 +85,7 @@ function Pagination({
         )
       )}
 
-      <button
+      <button aria-label="Next page"
         type="button"
         className="hover:bg-base/10 cursor-pointer px-2 py-1.5 rounded disabled:opacity-50"
         onClick={() => onPageChange(currentPage + 1)}

@@ -67,7 +67,7 @@ const ResatPasswordPage = () => {
               placeholder="Enter your password"
               className={`${showPassword ? "text-gray-600 w-full" : "w-full"}`}
             />
-            <button
+            <button aria-label={showPassword ? "Hide password" : "Show password"}
               type="button"
               onClick={() => setShowPassword(!showPassword)}
               className={`absolute cursor-pointer right-3 top-[50px] transform -translate-y-1/2 ${

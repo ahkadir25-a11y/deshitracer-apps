@@ -188,6 +188,7 @@ const BookingModal: React.FC<BookingModalProps> = ({ isOpen, onClose, whatsappNu
                   <label className="text-gray-600 block">Number of person</label>
                   <input
                     type="number"
+                    inputMode="numeric"
                     className="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-300 focus:outline-none"
                     value={guests}
                     onChange={(e) => setGuests(parseInt(e.target.value))}

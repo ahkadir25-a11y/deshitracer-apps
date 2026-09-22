@@ -8,7 +8,7 @@ import LoginAdminRep from "@/components/admin-components/LoginAdminRep";
 const DashboardLayout = ({ children }: { children: React.ReactNode }) => {
   return (
     <LoginAdminRep>
-      <section className="flex relative h-screen overflow-hidden">
+      <section className="flex relative h-screen supports-[height:100dvh]:h-dvh overflow-hidden">
         <SidebarWrapper menuItems={adMenuItems} />
         <MainContentWrapper>{children}</MainContentWrapper>
       </section>

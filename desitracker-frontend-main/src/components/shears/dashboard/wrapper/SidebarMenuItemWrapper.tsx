@@ -8,7 +8,7 @@ const SidebarMenuItemWrapper = ({
 }) => {
  
   return (
-    <aside className="border-r bg-[#0E111A]  overflow-auto shadow h-screen ">
+    <aside className="border-r bg-[#0E111A]  overflow-auto shadow h-screen supports-[height:100dvh]:h-dvh ">
       <div>
         <Hamburger />
         <div className="px-1 py-10 w-full">{children}</div>

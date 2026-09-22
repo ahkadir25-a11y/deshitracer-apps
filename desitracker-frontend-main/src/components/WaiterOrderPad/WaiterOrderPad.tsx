@@ -475,7 +475,7 @@ const WaiterOrderPad: React.FC<WaiterOrderPadProps> = ({
                   value={query}
                   onChange={(e) => setQuery(e.target.value)}
                   placeholder={activeCategoryId ? "Search products…" : "Search categories…"}
-                  className="w-full bg-transparent text-sm outline-none"
+                  className="w-full bg-transparent text-sm outline-none max-md:text-base"
                 />
                 {query && (
                   <button
@@ -494,7 +494,7 @@ const WaiterOrderPad: React.FC<WaiterOrderPadProps> = ({
                 value={tableNo}
                 onChange={(e) => dispatch(setTableNo(e.target.value))}
                 placeholder="Table #"
-                className="w-[110px] rounded-xl border border-gray-200 bg-white px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-blue-500"
+                className="w-[110px] rounded-xl border border-gray-200 bg-white px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-blue-500 max-md:text-base"
               />
               <button
                 onClick={() => dispatch(clearOrder())}
@@ -742,7 +742,7 @@ const WaiterOrderPad: React.FC<WaiterOrderPadProps> = ({
                     value={tableNo}
                     onChange={(e) => dispatch(setTableNo(e.target.value))}
                     placeholder="Table #"
-                    className="w-full rounded-xl border border-gray-200 bg-white px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-blue-500"
+                    className="w-full rounded-xl border border-gray-200 bg-white px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-blue-500 max-md:text-base"
                   />
                   <button
                     onClick={() => dispatch(clearOrder())}
@@ -756,7 +756,7 @@ const WaiterOrderPad: React.FC<WaiterOrderPadProps> = ({
                   value={notes}
                   onChange={(e) => dispatch(setNotes(e.target.value))}
                   placeholder="Notes (extra spicy, no onion...)"
-                  className="mt-3 w-full min-h-[90px] rounded-xl border border-gray-200 bg-white px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-blue-500"
+                  className="mt-3 w-full min-h-[90px] rounded-xl border border-gray-200 bg-white px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-blue-500 max-md:text-base"
                 />
               </div>
 
@@ -1015,7 +1015,7 @@ const WaiterOrderPad: React.FC<WaiterOrderPadProps> = ({
                 value={tableNo}
                 onChange={(e) => dispatch(setTableNo(e.target.value))}
                 placeholder="Table #"
-                className="w-full rounded-xl border border-gray-200 bg-white px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-blue-500"
+                className="w-full rounded-xl border border-gray-200 bg-white px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-blue-500 max-md:text-base"
               />
               <button
                 onClick={() => dispatch(clearOrder())}
@@ -1029,7 +1029,7 @@ const WaiterOrderPad: React.FC<WaiterOrderPadProps> = ({
               value={notes}
               onChange={(e) => dispatch(setNotes(e.target.value))}
               placeholder="Notes"
-              className="w-full min-h-[70px] rounded-xl border border-gray-200 bg-white px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-blue-500"
+              className="w-full min-h-[70px] rounded-xl border border-gray-200 bg-white px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-blue-500 max-md:text-base"
             />
 
             {items.length === 0 ? (

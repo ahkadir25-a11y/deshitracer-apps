@@ -65,7 +65,7 @@ const ResetPasswordPage = ({ params }: { params: any }) => {
               placeholder="Enter your new password"
               className={`${showPassword ? "text-gray-600 w-full" : "w-full"}`}
             />
-            <button
+            <button aria-label={showPassword ? "Hide password" : "Show password"}
               type="button"
               onClick={() => setShowPassword(!showPassword)}
               className={`absolute right-3 top-[42px] transform -translate-y-1/2 ${

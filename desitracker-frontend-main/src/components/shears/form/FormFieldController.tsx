@@ -30,6 +30,8 @@ interface FormFieldControllerProps<T extends FieldValues = FieldValues> {
   labelClassName?: string;
   options?: Option[];
   onChange?: (name: string, value: string) => void;
+  autoComplete?: string;
+  autoCapitalize?: "none" | "off" | "on" | "sentences" | "words" | "characters";
 }
 
 const FormFieldController = <T extends FieldValues = FieldValues>({
@@ -42,6 +44,8 @@ const FormFieldController = <T extends FieldValues = FieldValues>({
   className = "w-full",
   labelClassName = "block text-sm font-medium text-gray-800",
   options = [],
+  autoComplete,
+  autoCapitalize,
 }: FormFieldControllerProps<T>) => {
   const formatString = (str: string) =>
     str
@@ -58,7 +62,7 @@ const FormFieldController = <T extends FieldValues = FieldValues>({
       border 
       rounded 
       px-3 py-2.5
-      text-sm 
+      text-sm max-md:text-base
       font-normal 
       font-poppins 
       transition-all 
@@ -102,6 +106,8 @@ const FormFieldController = <T extends FieldValues = FieldValues>({
             value={field.value || ""}
             placeholder={formatString(placeholder || label || "")}
             className={baseInputClass}
+            autoComplete={autoComplete}
+            autoCapitalize={autoCapitalize}
           />
         );
     }

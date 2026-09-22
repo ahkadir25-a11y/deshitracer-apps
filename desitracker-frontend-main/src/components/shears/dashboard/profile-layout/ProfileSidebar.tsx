@@ -185,7 +185,7 @@ export default function ProfileSidebar() {
   };
 
   return (
-    <aside className="sticky top-3 h-[calc(100vh-24px)] overflow-hidden border border-slate-800 bg-slate-900 text-slate-200 shadow-sm">
+    <aside className="sticky top-3 h-[calc(100vh-24px)] supports-[height:100dvh]:h-[calc(100dvh-24px)] overflow-hidden border border-slate-800 bg-slate-900 text-slate-200 shadow-sm">
       <div className="border-b border-slate-800 p-4">
         <div className="flex items-center gap-3">
           <div className="relative">

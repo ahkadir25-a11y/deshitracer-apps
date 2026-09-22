@@ -56,6 +56,7 @@ function ShowEntries({ limit, onLimitChange }: ShowEntriesProps) {
             <div className="flex items-center justify-between gap-x-1 p-1">
               <input
                 type="number"
+                inputMode="numeric"
                 min="1"
                 value={customValue}
                 onChange={(e) => setCustomValue(e.target.value)}

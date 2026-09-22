@@ -10,6 +10,7 @@ import {
   useGetUserByIdQuery,
   useUpdateUserMutation,
 } from "@/app/redux/services/users.services";
+import { useUploadImagesMutation } from "@/app/redux/services/upload-images.service";
 import { useAppSelector } from "@/app/redux/hoook";
 import toast from "react-hot-toast";
 
@@ -27,6 +28,7 @@ const ProfileEditForm = () => {
   const [manualaLoading,setManualLoading] = useState(false);
   const { data, isLoading, isError } = useGetUserByIdQuery(user?.id);
   const [updateUser, { isLoading: isUpdating }] = useUpdateUserMutation();
+  const [uploadImages] = useUploadImagesMutation();
 
   const [formError, setFormError] = useState<string | null>(null);
 
@@ -45,24 +47,8 @@ const ProfileEditForm = () => {
     try {
       const formData = new FormData();
       formData.append("file", file);
-      formData.append("upload_preset", "ml_default"); // Replace with your Cloudinary upload preset
-      // Optional: Add additional parameters like folder, tags, etc.
-      // formData.append("folder", "profile_pics");
-
-      const response = await fetch(
-        `https://api.cloudinary.com/v1_1/dzem7xarv/image/upload`, // Replace CLOUDINARY_CLOUD_NAME with your Cloudinary cloud name
-        {
-          method: "POST",
-          body: formData,
-        }
-      );
-
-      if (!response.ok) {
-        throw new Error(`Cloudinary upload failed: ${response.statusText}`);
-      }
-
-      const data = await response.json();
-      return data.secure_url; // Return the secure URL of the uploaded file
+      const response = await uploadImages({ formData, name: "users" }).unwrap();
+      return response?.data?.[0]; // Assuming response returns an array of URLs
     } catch (error) {
       const errorMessage =
         error instanceof Error
@@ -70,7 +56,7 @@ const ProfileEditForm = () => {
           : typeof error === "string"
           ? error
           : "Unknown error";
-      throw new Error("Failed to upload file to Cloudinary: " + errorMessage);
+      throw new Error("Failed to upload file to backend: " + errorMessage);
     }
   };
 

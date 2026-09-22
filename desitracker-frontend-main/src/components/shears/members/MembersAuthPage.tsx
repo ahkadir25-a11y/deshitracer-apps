@@ -140,7 +140,7 @@ export default function EnhancedMembersAuthPage() {
         <User className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-white/50" />
         <input
           placeholder="Full name"
-          className="w-full pl-9 pr-3 py-3 rounded-xl bg-white/5 border border-white/10 text-white placeholder-white/40 outline-none text-sm focus:border-indigo-400/60"
+          className="w-full pl-9 pr-3 py-3 rounded-xl bg-white/5 border border-white/10 text-white placeholder-white/40 outline-none text-sm focus:border-indigo-400/60 max-md:text-base"
           value={form.name}
           onChange={(e) => setForm({ ...form, name: e.target.value })}
           required
@@ -153,7 +153,7 @@ export default function EnhancedMembersAuthPage() {
           <MapPin className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-white/50" />
           <input
             placeholder="City "
-            className="w-full pl-9 pr-3 py-3 rounded-xl bg-white/5 border border-white/10 text-white placeholder-white/40 outline-none text-sm focus:border-indigo-400/60"
+            className="w-full pl-9 pr-3 py-3 rounded-xl bg-white/5 border border-white/10 text-white placeholder-white/40 outline-none text-sm focus:border-indigo-400/60 max-md:text-base"
             value={form.city}
             onChange={(e) => setForm({ ...form, city: e.target.value })}
             required
@@ -165,7 +165,7 @@ export default function EnhancedMembersAuthPage() {
           <input
             type="email"
             placeholder="Email "
-            className="w-full pl-9 pr-3 py-3 rounded-xl bg-white/5 border border-white/10 text-white placeholder-white/40 outline-none text-sm focus:border-indigo-400/60"
+            className="w-full pl-9 pr-3 py-3 rounded-xl bg-white/5 border border-white/10 text-white placeholder-white/40 outline-none text-sm focus:border-indigo-400/60 max-md:text-base"
             value={form.email}
             onChange={(e) => setForm({ ...form, email: e.target.value })}
             required
@@ -179,8 +179,11 @@ export default function EnhancedMembersAuthPage() {
   <div className="relative">
     <Phone className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-white/50" />
     <input
+      type="tel"
+      inputMode="tel"
+      autoComplete="tel"
       placeholder="Phone number"
-      className="w-full pl-9 pr-3 py-3 rounded-xl bg-white/5 border border-white/10 text-white placeholder-white/40 outline-none text-sm focus:border-indigo-400/60"
+      className="w-full pl-9 pr-3 py-3 rounded-xl bg-white/5 border border-white/10 text-white placeholder-white/40 outline-none text-sm focus:border-indigo-400/60 max-md:text-base"
       value={form.phone}
       onChange={(e) => setForm({ ...form, phone: e.target.value })}
       required
@@ -193,7 +196,7 @@ export default function EnhancedMembersAuthPage() {
     <input
       type={showPassword ? "text" : "password"}
       placeholder="Password"
-      className="w-full pl-9 pr-9 py-3 rounded-xl bg-white/5 border border-white/10 text-white placeholder-white/40 outline-none text-sm focus:border-indigo-400/60"
+      className="w-full pl-9 pr-9 py-3 rounded-xl bg-white/5 border border-white/10 text-white placeholder-white/40 outline-none text-sm focus:border-indigo-400/60 max-md:text-base"
       value={form.password}
       onChange={(e) => setForm({ ...form, password: e.target.value })}
       required

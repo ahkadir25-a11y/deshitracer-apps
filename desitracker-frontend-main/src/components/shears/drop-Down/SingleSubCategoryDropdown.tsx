@@ -104,7 +104,7 @@ const SingleSubCategoryDropdown = ({
                 placeholder="Search subcategories..."
                 value={searchTerm}
                 onChange={(e) => setSearchTerm(e.target.value)}
-                className="w-full px-3 py-2 text-sm text-gray-800 bg-white border border-gray-200 rounded-md focus:outline-none focus:ring-1 focus:ring-blue-400"
+                className="w-full px-3 py-2 text-sm text-gray-800 bg-white border border-gray-200 rounded-md focus:outline-none focus:ring-1 focus:ring-blue-400 max-md:text-base"
               />
             </div>
 

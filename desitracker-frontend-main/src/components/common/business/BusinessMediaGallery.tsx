@@ -64,9 +64,9 @@ const BusinessMediaGallery: React.FC<BusinessMediaGalleryProps> = ({ images = []
               alt={selectedImage.description || "Selected image"}
               width={1200}
               height={800}
-              className="w-full h-auto max-h-screen object-contain rounded-lg"
+              className="w-full h-auto max-h-screen supports-[height:100dvh]:max-h-dvh object-contain rounded-lg"
             />
-            <button
+            <button aria-label="Close image"
               className="absolute top-4 right-4 text-white text-2xl font-bold"
               onClick={() => setSelectedImage(null)}
             >

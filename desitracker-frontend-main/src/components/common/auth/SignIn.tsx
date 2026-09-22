@@ -272,7 +272,7 @@ const SignInForm = () => {
                     },
                   }}
                 />
-                <button
+                <button aria-label={showPassword ? "Hide password" : "Show password"}
                   type="button"
                   onClick={() => setShowPassword(!showPassword)}
                   className="absolute right-3 top-[42px] transform -translate-y-1/2 text-gray-600 hover:text-[#222]"
@@ -297,7 +297,7 @@ const SignInForm = () => {
                     },
                   }}
                 />
-                <button
+                <button aria-label={isConfirmPassword ? "Hide confirm password" : "Show confirm password"}
                   type="button"
                   onClick={() => setisConfirmPassword(!isConfirmPassword)}
                   className="absolute right-3 top-[42px] transform -translate-y-1/2 text-gray-600 hover:text-[#222]"

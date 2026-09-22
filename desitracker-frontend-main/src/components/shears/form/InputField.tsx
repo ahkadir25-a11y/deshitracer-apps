@@ -19,6 +19,8 @@ const InputField = ({
   options = [],
   onChange,
   rules,
+  autoComplete,
+  autoCapitalize,
 }: {
   label: string;
   name: string;
@@ -38,6 +40,8 @@ const InputField = ({
   options?: Option[];
   rules?: any;
   onChange?: (name: string, value: string) => void;
+  autoComplete?: string;
+  autoCapitalize?: "none" | "off" | "on" | "sentences" | "words" | "characters";
 }) => (
   <div className="space-y-1">
     <FormFieldController
@@ -60,6 +64,8 @@ const InputField = ({
       className={className}
       options={options}
       onChange={onChange}
+      autoComplete={autoComplete}
+      autoCapitalize={autoCapitalize}
     />
   </div>
 );

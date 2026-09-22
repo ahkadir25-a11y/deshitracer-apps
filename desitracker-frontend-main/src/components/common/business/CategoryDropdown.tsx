@@ -128,7 +128,7 @@ const CategoryDropdown: React.FC<Props> = ({
                                     placeholder="Search category..."
                                     value={searchTerm}
                                     onChange={(e) => setSearchTerm(e.target.value)}
-                                    className="w-full px-3 py-1 text-xs border border-gray-200 rounded"
+                                    className="w-full px-3 py-1 text-xs border border-gray-200 rounded max-md:text-base"
                                 />
                             </div>
                             <ul>
@@ -190,7 +190,7 @@ const CategoryDropdown: React.FC<Props> = ({
                                         placeholder="Search subcategory..."
                                         value={subSearchTerm}
                                         onChange={(e) => setSubSearchTerm(e.target.value)}
-                                        className="w-full px-3 py-2 text-xs text-gray-700 bg-white border border-gray-200 rounded focus:outline-none focus:ring-1 focus:ring-blue-400"
+                                        className="w-full px-3 py-2 text-xs text-gray-700 bg-white border border-gray-200 rounded focus:outline-none focus:ring-1 focus:ring-blue-400 max-md:text-base"
                                     />
                                 </div>
                                 <ul className="max-h-48 overflow-y-auto">

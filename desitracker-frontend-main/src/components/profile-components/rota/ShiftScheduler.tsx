@@ -1168,6 +1168,7 @@ function BigShiftForm({
             </label>
             <input
               type="number"
+              inputMode="numeric"
               min={0}
               value={breakMinutes}
               onChange={(e) => setBreakMinutes(Number(e.target.value))}

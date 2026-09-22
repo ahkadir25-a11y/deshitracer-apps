@@ -582,6 +582,7 @@ export default function DayOffersManager({ userId, businessId, className = '' }:
                           <div className="relative inline-flex">
                             <input
                               type="number"
+                              inputMode="numeric"
                               min={0}
                               max={100}
                               step={1}

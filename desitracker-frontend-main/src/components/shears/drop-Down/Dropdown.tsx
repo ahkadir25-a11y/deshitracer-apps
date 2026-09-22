@@ -108,7 +108,7 @@ export function Dropdown<T extends DropdownItem>({
           <div className="p-2">
             <input
               type="search"
-              className="w-full border px-3 py-2 !bg-white focus:bg-white focus:!outline-none focus:ring-0 !rounded text-xs md:text-sm xl:text-sm font-normal font-poppins !border-[#DEE4E8] outline-none transition-colors duration-300"
+              className="w-full border px-3 py-2 !bg-white focus:bg-white focus:!outline-none focus:ring-0 !rounded text-xs md:text-sm xl:text-sm font-normal font-poppins !border-[#DEE4E8] outline-none transition-colors duration-300 max-md:text-base"
               placeholder={searchPlaceholder}
               value={searchTerm}
               required={required}

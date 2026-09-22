@@ -263,6 +263,7 @@ const MyProducts: React.FC = () => {
                 <Percent className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
                 <input
                   type="number"
+                  inputMode="decimal"
                   min={0}
                   max={100}
                   value={discountValue}

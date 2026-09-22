@@ -113,7 +113,7 @@ const CountryAndCityDropDown = ({
             <div className="p-2">
               <input
                 type="search"
-                className="w-full !bg-white focus:bg-white focus:!outline-none focus:ring-0 !rounded text-xs md:text-sm xl:text-sm font-normal font-poppins !border-[#DEE4E8] outline-none transition-colors duration-300"
+                className="w-full !bg-white focus:bg-white focus:!outline-none focus:ring-0 !rounded text-xs md:text-sm xl:text-sm font-normal font-poppins !border-[#DEE4E8] outline-none transition-colors duration-300 max-md:text-base"
                 placeholder="Search your country"
                 value={searchTerm}
                 onChange={(e) => setSearchTerm(e.target.value)}
@@ -193,7 +193,7 @@ const CountryAndCityDropDown = ({
             <div className="p-2">
               <input
                 type="search"
-                className="w-full !bg-white focus:bg-white focus:!outline-none focus:ring-0 !rounded text-xs md:text-sm xl:text-sm font-normal font-poppins !border-[#DEE4E8] outline-none transition-colors duration-300"
+                className="w-full !bg-white focus:bg-white focus:!outline-none focus:ring-0 !rounded text-xs md:text-sm xl:text-sm font-normal font-poppins !border-[#DEE4E8] outline-none transition-colors duration-300 max-md:text-base"
                 placeholder="Search your country"
                 value={searchTermCity}
                 onChange={(e) => setSearchTermCity(e.target.value)}
