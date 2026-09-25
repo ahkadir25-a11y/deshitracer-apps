@@ -22,7 +22,11 @@ export async function resolvePrincipal(req: Request): Promise<Principal | null> 
 
   try {
     const d: any = jwt.verify(token, config.jwt.accessSecret as string);
-    if (d?.id) return { id: String(d.id), role: String(d.role || 'user'), email: d.email };
+    // A member token says so. When MEMBER_JWT_SECRET is the same value as the
+    // access secret (it is in .env), a member token also verifies here, and
+    // was being read as a plain 'user' — members got 403 on their own order
+    // history and no member discount. Leave it for the member branch below.
+    if (d?.id && d?.type !== 'member') return { id: String(d.id), role: String(d.role || 'user'), email: d.email };
   } catch {
     /* not a user token — fall through to member */
   }
