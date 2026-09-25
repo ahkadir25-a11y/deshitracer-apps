@@ -645,13 +645,22 @@ const setManagerPin = async (businessId: string, pin: string, decodedUser: JwtPa
   return { ok: true };
 };
 
+// Whether a PIN exists — never the PIN or its hash — so the owner's settings
+// can show "set / not set" and prompt them before a waiter hits the gate.
+const getManagerPinStatus = async (businessId: string) => {
+  const biz = await Business.findById(businessId).select('+managerPin').lean();
+  if (!biz) throw new AppError(404, 'Business not found');
+  return { configured: !!(biz as any).managerPin };
+};
+
 const verifyManagerPin = async (businessId: string, pin: string) => {
   const raw = (pin || '').trim();
   if (!raw) throw new AppError(400, 'PIN is required');
   const biz = await Business.findById(businessId).select('+managerPin');
   if (!biz) throw new AppError(404, 'Business not found');
   if (!biz.managerPin) {
-    throw new AppError(400, 'Manager PIN not configured for this business');
+    // Shown to the waiter as-is, so it says what to do next.
+    throw new AppError(400, 'No Manager PIN has been set for this business yet. The owner can set one in Edit Business.');
   }
   const ok = await bcrypt.compare(raw, biz.managerPin);
   if (!ok) throw new AppError(401, 'Incorrect PIN');
@@ -666,5 +675,6 @@ export const BusinessServices = {
   deleteBusiness,
   getAllBusinessListings,
   setManagerPin,
+  getManagerPinStatus,
   verifyManagerPin,
 };

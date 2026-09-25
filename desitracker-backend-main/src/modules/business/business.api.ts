@@ -13,6 +13,9 @@ const pinGuessLimiter = rateLimit({
   windowMs: 15 * 60 * 1000,
   limit: 8,
   skipSuccessfulRequests: true,
+  // Only a wrong PIN (401) is a guess. "No PIN set yet" (400) and the like
+  // must not use up a waiter's tries before the owner has even set one.
+  requestWasSuccessful: (_req, res) => res.statusCode !== 401,
   standardHeaders: true,
   legacyHeaders: false,
   keyGenerator: (req) => `${(req as any).user?.id || 'anon'}:${String(req.body?.businessId || '')}`,
@@ -63,6 +66,14 @@ router.post(
   auth(USER_ROLE.ADMIN, USER_ROLE.BUSINESS_OWNER),
   requireBusinessAccess,
   BusinessControllers.setManagerPin,
+);
+
+// Manager PIN — is one set? (yes/no only). Same audience as verify.
+router.get(
+  '/manager-pin/status',
+  auth(USER_ROLE.ADMIN, USER_ROLE.BUSINESS_OWNER, USER_ROLE.STAFF),
+  requireBusinessAccess,
+  BusinessControllers.getManagerPinStatus,
 );
 
 // Manager PIN — verify. Only people who work at this business may try it

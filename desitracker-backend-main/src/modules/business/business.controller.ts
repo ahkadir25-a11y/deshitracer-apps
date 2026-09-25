@@ -104,6 +104,16 @@ const setManagerPin = handleAsyncRequest(async (req: Request, res: Response) => 
   });
 });
 
+const getManagerPinStatus = handleAsyncRequest(async (req: Request, res: Response) => {
+  const result = await BusinessServices.getManagerPinStatus(String(req.query.businessId || ''));
+  sendResponse(res, {
+    statusCode: httpStatus.OK,
+    success: true,
+    message: 'Manager PIN status',
+    data: result,
+  });
+});
+
 const verifyManagerPin = handleAsyncRequest(async (req: Request, res: Response) => {
   const { businessId, pin } = req.body || {};
   const result = await BusinessServices.verifyManagerPin(businessId, pin);
@@ -123,5 +133,6 @@ export const BusinessControllers = {
   deleteBusiness,
   getAllBusinessListings,
   setManagerPin,
+  getManagerPinStatus,
   verifyManagerPin,
 };
