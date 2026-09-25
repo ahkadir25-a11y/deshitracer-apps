@@ -5,6 +5,8 @@ import sendEmail from '../../utils/lib/sendEmail';
 import { bookingConfirmationTemplate, bookingOwnerNotificationTemplate } from './booking.template';
 import { resolveBusinessRecipients } from '../../utils/lib/businessRecipients';
 import { isBusinessMember } from '../../utils/lib/businessAccess';
+import { sendExpoPush } from '../../utils/lib/push';
+import { User } from '../user/user/user.model';
 
 // Update/delete take only a booking id, so the business scope must be enforced
 // against the booking's own record — the caller must be owner/staff/admin of
@@ -22,6 +24,25 @@ const canManageBooking = async (req: Request, booking: { businessId: unknown }):
 export const createBooking = async (req: Request, res: Response): Promise<Response> => {
   try {
     const { ownerId, businessId, name, phone, email, bookingDate, guests, specialRequests } = req.body;
+
+    // A business that has switched reservations off must not receive them —
+    // whatever the client did. The apps hide the Booking tab, but a deep link,
+    // a stale screen or any other client could still post here.
+    const biz = await Business.findById(businessId).select('operationDetails').lean();
+    if (!biz) {
+      return res.status(404).json({ message: 'Business not found' });
+    }
+    if ((biz as any)?.operationDetails?.offerOnlineBooking !== true) {
+      return res.status(400).json({
+        message: 'This business is not taking table reservations at the moment.',
+      });
+    }
+
+    // A reservation for a time that has already passed is never intentional.
+    const when = new Date(bookingDate);
+    if (Number.isNaN(when.getTime()) || when.getTime() < Date.now()) {
+      return res.status(400).json({ message: 'Please choose a future date and time.' });
+    }
 
     const newBooking = new Booking({
       ownerId,
@@ -54,6 +75,34 @@ export const createBooking = async (req: Request, res: Response): Promise<Respon
         }
       })();
     }
+
+    // Push the reservation to the owner's phone. Orders already do this; a
+    // booking only sent email, so one arriving mid-service went unnoticed until
+    // somebody happened to check an inbox. Best-effort — a push failure must
+    // never fail the booking.
+    (async () => {
+      try {
+        const owner = await User.findById(
+          (await Business.findById(businessId).select('owner').lean())?.owner
+        ).select('expoPushToken').lean();
+        const token = (owner as any)?.expoPushToken;
+        if (token) {
+          const when = new Date(bookingDate);
+          const whenLabel = Number.isNaN(when.getTime())
+            ? ''
+            : ` — ${when.toLocaleDateString()} ${when.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}`;
+          await sendExpoPush({
+            to: token,
+            title: '📅 New Reservation',
+            body: `${name} · ${guests} guest${Number(guests) === 1 ? '' : 's'}${whenLabel}`,
+            sound: 'default',
+            data: { type: 'NEW_BOOKING', businessId: String(businessId) },
+          });
+        }
+      } catch (pushErr: any) {
+        console.error('[booking] owner push failed:', pushErr?.message);
+      }
+    })();
 
     // Notify the business (owner + active staff) that a reservation came in.
     // Reservations are infrequent, so staff are included here. Best-effort: an

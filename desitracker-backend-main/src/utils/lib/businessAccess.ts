@@ -143,6 +143,7 @@ export const authOrderRead: RequestHandler = async (req, res, next) => {
 
     const businessId = req.query.business_id as string | undefined;
     const userId = req.query.user_id as string | undefined;
+    const memberId = req.query.member_id as string | undefined;
 
     if (businessId) {
       const ok = await isBusinessMember(principal, businessId);
@@ -151,9 +152,37 @@ export const authOrderRead: RequestHandler = async (req, res, next) => {
       if (principal.role !== USER_ROLE.ADMIN && String(userId) !== principal.id) {
         throw new AppError(403, 'You can only view your own orders');
       }
+    } else if (memberId) {
+      if (principal.role !== 'member' || String(memberId) !== principal.id) {
+        throw new AppError(403, 'You can only view your own orders');
+      }
     } else {
-      throw new AppError(400, 'business_id or user_id is required');
+      throw new AppError(400, 'business_id, user_id or member_id is required');
     }
+    next();
+  } catch (e) {
+    next(e);
+  }
+};
+
+/**
+ * Any signed-in caller — staff/owner/admin (User token) or a member (Member
+ * token) — may proceed. Used by endpoints the controller does not scope by
+ * role at all, so there is nothing to check beyond "someone is logged in".
+ *
+ * Members hitting the image upload route used to be run through auth(), which
+ * verifies against the User secret and then looks the token's id up in the
+ * Users collection. A member's id is never in that collection, so every
+ * member upload failed with "This user is not found" — a Users-table lookup
+ * error surfacing as if the member's account itself didn't exist. Resolving
+ * through resolvePrincipal instead accepts either token; req.user is set for
+ * both so downstream code that already reads req.user keeps working.
+ */
+export const authAnySignedIn: RequestHandler = async (req, res, next) => {
+  try {
+    const principal = await resolvePrincipal(req);
+    if (!principal) throw new AppError(401, 'You must be signed in.');
+    (req as any).user = { id: principal.id, role: principal.role, email: principal.email };
     next();
   } catch (e) {
     next(e);

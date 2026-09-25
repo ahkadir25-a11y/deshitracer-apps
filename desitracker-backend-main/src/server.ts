@@ -5,6 +5,7 @@ import config from './config';
 import { initSocket } from './utils/socket';
 import { startCronJobs } from './utils/cron';
 import removePhoneNumberIndex from './modules/user/user/removeIndex';
+import { syncDayOfferIndexes } from './modules/product/product.service';
 // import seedSuperAdmin from './app/DB';
 
 let server: Server;
@@ -16,6 +17,11 @@ async function main() {
     // One-time: drop the stale unique `phone_1` index (legacy schema) so phone
     // duplicates are allowed. Done once here instead of on every registration.
     await removePhoneNumberIndex();
+
+    // One-time: drop the stale unique { business_id, day } index on day offers.
+    // It predates scoped, dated offers and would reject a second Sunday offer
+    // even when the date windows do not overlap.
+    await syncDayOfferIndexes();
 
     // seed super admin
     // seedSuperAdmin();

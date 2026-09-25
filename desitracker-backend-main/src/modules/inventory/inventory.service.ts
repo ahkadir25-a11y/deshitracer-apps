@@ -12,7 +12,8 @@ const createIngredient = async (payload: TIngredient) => {
 };
 
 const getIngredientsByBusiness = async (businessId: string) => {
-  const result = await Ingredient.find({ business: businessId });
+  // Read-only list — skip hydrating full Mongoose documents.
+  const result = await Ingredient.find({ business: businessId }).lean();
   return result;
 };
 
@@ -95,7 +96,8 @@ const getStockHistory = async (businessId: string) => {
   const result = await StockHistory.find({ business: businessId })
     .populate('ingredient', 'name unit')
     .populate('user', 'name')
-    .sort({ createdAt: -1 });
+    .sort({ createdAt: -1 })
+    .lean();
   return result;
 };
 

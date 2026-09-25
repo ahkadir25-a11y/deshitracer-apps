@@ -1,4 +1,5 @@
 import { Request, Response } from "express";
+import { canAccessUserScopedData } from '../../utils/lib/businessAccess';
 import mongoose from "mongoose";
 import ProductOption from "./productOption.model";
 
@@ -9,15 +10,53 @@ type AuthRequest = Request & {
   };
 };
 
+// Whose options are being asked for.
+//
+// This used to read the caller's own id FIRST, which meant a staff member
+// could see their employer's options — the list route has no auth, so it used
+// the id the app sent — and then get a 404 on every edit or delete, because
+// the write routes silently substituted the staff member's own id and looked
+// for an option that had never belonged to them. The options were fine; the
+// question was wrong.
+//
+// The request says whose data it wants. Whether the caller may have it is a
+// separate question, answered by assertMayActFor below.
 const getUserIdFromRequest = (req: AuthRequest): string | null => {
   return (
-    req.user?.id ||
-    req.user?._id ||
     req.body?.userId ||
     ((req.query?.userId as any) as string) ||
     req.params?.userId ||
+    req.user?.id ||
+    req.user?._id ||
     null
   );
+};
+
+// May this caller act on that owner's options?
+//
+// Admin, the owner themselves, or staff of a business that owner runs — the
+// same rule the cleaning and fridge logs already use. Returns true when it has
+// already answered the request, so the caller just returns.
+const denyIfNotAllowed = async (
+  req: AuthRequest,
+  res: Response,
+  targetUserId: string,
+): Promise<boolean> => {
+  const caller = (req as any).user;
+  // No auth on this route (the read routes) — scoping by the requested id is
+  // all there is, exactly as before.
+  if (!caller?.id && !caller?._id) return false;
+  const allowed = await canAccessUserScopedData(
+    caller?.id || caller?._id,
+    caller?.role,
+    String(targetUserId),
+    caller?.email,
+  );
+  if (!allowed) {
+    res.status(403).json({ error: "You are not authorized to change these options" });
+    return true;
+  }
+  return false;
 };
 
 // Create a new product option
@@ -38,6 +77,8 @@ export const createProductOption = async (
       res.status(400).json({ error: "Invalid userId" });
       return;
     }
+
+    if (await denyIfNotAllowed(req, res, userId)) return;
 
     if (!name || typeof name !== "string") {
       res.status(400).json({ error: "name is required" });
@@ -123,6 +164,8 @@ export const getSingleProductOption = async (
       res.status(400).json({ error: "Invalid optionId" });
       return;
     }
+    if (await denyIfNotAllowed(req, res, userId)) return;
+
 
     const option = await ProductOption.findOne({ _id: optionId, userId });
 
@@ -161,6 +204,8 @@ export const updateProductOption = async (
       res.status(400).json({ error: "Invalid optionId" });
       return;
     }
+    if (await denyIfNotAllowed(req, res, userId)) return;
+
 
     const updateData: Record<string, any> = {};
 
@@ -234,6 +279,8 @@ export const deleteProductOption = async (
       res.status(400).json({ error: "Invalid optionId" });
       return;
     }
+    if (await denyIfNotAllowed(req, res, userId)) return;
+
 
     const deletedOption = await ProductOption.findOneAndDelete({
       _id: optionId,

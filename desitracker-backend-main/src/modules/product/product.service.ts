@@ -187,17 +187,124 @@ export async function countDayOffersForBusiness(business_id: string): Promise<nu
   return DayOffer.countDocuments({ business_id });
 }
 
+/**
+ * Two offers clash only when they could both fire on the same product on the
+ * same day — same weekday, same scope, and date windows that overlap. Anything
+ * else is legitimate: next month's offer scheduled alongside this month's, or
+ * two categories priced differently on the same day.
+ *
+ * A missing end_date means "runs forever", so it overlaps everything after its
+ * start. Comparison is by calendar day, matching how the app reads the window.
+ */
+function scopesCollide(
+  a: { product_category_id?: any; product_ids?: any[] },
+  b: { product_category_id?: any; product_ids?: any[] },
+): boolean {
+  const aProducts = (a.product_ids || []).map(String);
+  const bProducts = (b.product_ids || []).map(String);
+
+  // Product-scoped offers clash only if they name a product in common.
+  if (aProducts.length && bProducts.length) {
+    return aProducts.some((id) => bProducts.includes(id));
+  }
+  // A product-scoped offer sits underneath the broader ones and wins on
+  // precedence rather than colliding with them.
+  if (aProducts.length || bProducts.length) return false;
+
+  const aCat = a.product_category_id ? String(a.product_category_id) : null;
+  const bCat = b.product_category_id ? String(b.product_category_id) : null;
+
+  // Two category offers clash only within the same category. A business-wide
+  // offer (no category) clashes with any other business-wide offer.
+  if (aCat && bCat) return aCat === bCat;
+  return !aCat && !bCat;
+}
+
+function windowsOverlap(
+  a: { start_date: Date; end_date?: Date | null },
+  b: { start_date: Date; end_date?: Date | null },
+): boolean {
+  const aStart = new Date(a.start_date).getTime();
+  const bStart = new Date(b.start_date).getTime();
+  const aEnd = a.end_date ? new Date(a.end_date).getTime() : Infinity;
+  const bEnd = b.end_date ? new Date(b.end_date).getTime() : Infinity;
+  return aStart <= bEnd && bStart <= aEnd;
+}
+
+export class OfferOverlapError extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = 'OfferOverlapError';
+  }
+}
+
+/** Throws if the candidate offer would collide with an existing one. */
+async function assertNoOverlappingOffer(candidate: {
+  _id?: string;
+  business_id: string;
+  day: Weekday;
+  product_category_id?: string;
+  product_ids?: string[];
+  start_date: Date;
+  end_date?: Date | null;
+}): Promise<void> {
+  const siblings = await DayOffer.find({
+    business_id: candidate.business_id,
+    day: candidate.day,
+    ...(candidate._id ? { _id: { $ne: candidate._id } } : {}),
+  }).lean();
+
+  const clash = siblings.find(
+    (o: any) => scopesCollide(candidate, o) && windowsOverlap(candidate, o),
+  );
+  if (!clash) return;
+
+  const until = (clash as any).end_date
+    ? new Date((clash as any).end_date).toLocaleDateString()
+    : 'no end date';
+  throw new OfferOverlapError(
+    `This overlaps an existing ${candidate.day} offer for the same products (runs until ${until}). ` +
+      `Change the dates so they do not overlap, or edit that offer instead.`,
+  );
+}
+
+/**
+ * The unique index this feature used to carry lives on in any database created
+ * before it was removed, and would keep rejecting perfectly valid offers with
+ * E11000. Dropping it is safe and idempotent — it does nothing once gone.
+ */
+export async function syncDayOfferIndexes(): Promise<void> {
+  const LEGACY = 'business_id_1_day_1';
+  try {
+    const existing = await DayOffer.collection.indexes();
+    const legacy = existing.find((i: any) => i.name === LEGACY && i.unique);
+    if (legacy) {
+      await DayOffer.collection.dropIndex(LEGACY);
+      console.log('[dayOffer] dropped legacy unique index', LEGACY);
+    }
+  } catch (err: any) {
+    // A fresh database has no such index; anything else is worth seeing but
+    // must not stop the server booting.
+    if (err?.codeName !== 'IndexNotFound') {
+      console.warn('[dayOffer] index sync skipped:', err?.message);
+    }
+  }
+}
+
 export async function createDayOffer(data: {
   user_id: string;
   business_id: string;
   product_category_id?: string;
+  product_ids?: string[];
   day: Weekday;
   discount_percent: number;
   start_date: Date;
   end_date?: Date | null;
 }): Promise<IDayOffer> {
-  const total = await countDayOffersForBusiness(data.business_id);
-  if (total >= 7) throw new Error('You already have 7 day offers for this business.');
+  // The old cap of seven assumed one offer per weekday. Offers are now scoped
+  // and dated, so a business can legitimately hold far more than seven — a
+  // different discount per category, plus next month's already scheduled.
+  await assertNoOverlappingOffer(data);
   const doc = new DayOffer(data as any);
   const saved = await doc.save();
 
@@ -314,12 +421,34 @@ export async function updateDayOffer(
   id: string,
   updates: Partial<{
     product_category_id: string;
+    product_ids: string[];
     day: Weekday;
     discount_percent: number;
     start_date: Date;
     end_date: Date | null;
   }>
 ): Promise<IDayOffer | null> {
+  const current = await DayOffer.findById(id).lean();
+  if (!current) return null;
+
+  // Validate what the offer will actually become, not just what changed — an
+  // edit that only moves the end date can still push it onto a neighbour.
+  await assertNoOverlappingOffer({
+    _id: id,
+    business_id: String((current as any).business_id),
+    day: (updates.day ?? (current as any).day) as Weekday,
+    product_category_id:
+      updates.product_category_id !== undefined
+        ? updates.product_category_id
+        : (current as any).product_category_id && String((current as any).product_category_id),
+    product_ids:
+      updates.product_ids !== undefined
+        ? updates.product_ids
+        : ((current as any).product_ids || []).map(String),
+    start_date: (updates.start_date ?? (current as any).start_date) as Date,
+    end_date: updates.end_date !== undefined ? updates.end_date : (current as any).end_date,
+  });
+
   return DayOffer.findByIdAndUpdate(id, updates, { new: true });
 }
 
@@ -351,6 +480,24 @@ export async function findActiveOfferForDate(params: {
  * bulk-updating product discounts and setting discount_start/end to today.
  * Optionally scopes to product_category_id if present on the offer.
  */
+/** Every offer live for a business on a given weekday and date. */
+export async function findActiveOffersForDate(params: {
+  business_id: string;
+  day: Weekday;
+  onDate?: Date;
+}): Promise<IDayOffer[]> {
+  const on = params.onDate ?? new Date();
+  const startOfDay = new Date(on.getFullYear(), on.getMonth(), on.getDate());
+  const endOfDay = new Date(on.getFullYear(), on.getMonth(), on.getDate(), 23, 59, 59, 999);
+
+  return DayOffer.find({
+    business_id: params.business_id,
+    day: params.day,
+    start_date: { $lte: endOfDay },
+    $or: [{ end_date: null }, { end_date: { $gte: startOfDay } }],
+  });
+}
+
 export async function applyDayOfferToday(params: {
   user_id: string;
   business_id: string;
@@ -365,36 +512,64 @@ export async function applyDayOfferToday(params: {
   const start = new Date(today.getFullYear(), today.getMonth(), today.getDate(), 0, 0, 0, 0);
   const end = new Date(today.getFullYear(), today.getMonth(), today.getDate(), 23, 59, 59, 999);
 
-  const offer = await findActiveOfferForDate({
+  const offers = await findActiveOffersForDate({
     business_id: params.business_id,
     day: params.day,
     onDate: today,
   });
 
-  if (!offer) {
+  if (!offers.length) {
     return { applied: false, matchedCount: 0, modifiedCount: 0 };
   }
 
-  const filters: { user_id?: string; business_id?: string; product_category_id?: string } = {
-    user_id: params.user_id,
-    business_id: params.business_id,
-  };
-  if (offer.product_category_id) {
-    filters.product_category_id = String(offer.product_category_id);
-  }
+  // Broadest first, so a narrower offer overwrites it on the products it
+  // names. That ordering is the precedence rule: a product offer beats a
+  // category offer, which beats a business-wide one.
+  const ordered = [...offers].sort((a, b) => scopeRank(a) - scopeRank(b));
 
-  const res = await bulkUpdateDiscount(
-    filters,
-    offer.discount_percent,
-    { discount_start: start, discount_end: end }
-  );
+  let matchedCount = 0;
+  let modifiedCount = 0;
+
+  for (const offer of ordered) {
+    const filters: {
+      user_id?: string;
+      business_id?: string;
+      product_category_id?: string;
+      _id?: any;
+    } = {
+      user_id: params.user_id,
+      business_id: params.business_id,
+    };
+
+    const productIds = (offer.product_ids || []).map(String);
+    if (productIds.length) {
+      filters._id = { $in: productIds };
+    } else if (offer.product_category_id) {
+      filters.product_category_id = String(offer.product_category_id);
+    }
+
+    const res = await bulkUpdateDiscount(filters, offer.discount_percent, {
+      discount_start: start,
+      discount_end: end,
+    });
+    matchedCount += res.matchedCount;
+    modifiedCount += res.modifiedCount;
+  }
 
   return {
     applied: true,
-    discount_percent: offer.discount_percent,
-    matchedCount: res.matchedCount,
-    modifiedCount: res.modifiedCount,
+    // The narrowest offer applied — what a single-number caller most expects.
+    discount_percent: ordered[ordered.length - 1].discount_percent,
+    matchedCount,
+    modifiedCount,
   };
+}
+
+/** 0 = whole business, 1 = one category, 2 = named products. */
+function scopeRank(o: { product_ids?: any[]; product_category_id?: any }): number {
+  if ((o.product_ids || []).length) return 2;
+  if (o.product_category_id) return 1;
+  return 0;
 }
 
 

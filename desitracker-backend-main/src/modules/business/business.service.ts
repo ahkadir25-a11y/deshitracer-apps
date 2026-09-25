@@ -12,7 +12,7 @@ import { USER_ROLE } from '../user/auth/auth.constants';
 import { User } from '../user/user/user.model';
 import { TBusiness } from './business.interface';
 import { Business } from './business.model';
-import { getBusinessApprovedTemplate } from './business.template';
+import { getBusinessWelcomeTemplate } from './business.template';
 import { cleanupBusinessRelations } from '../../utils/lib/cascadeCleanup';
 
 // Fill the country-neutral location fields from whatever the country actually
@@ -93,16 +93,28 @@ const registerBusiness = async (payload: TBusiness) => {
     throw new AppError(500, 'failed to create Business');
   }
 
-    sendEmail({
-      email: isOwner?.email,
-      subject: `Business Listing Approved – Desi Tracker`,
-      message: getBusinessApprovedTemplate(
-        `Business Listing Approved – Desi Tracker`,
-        result?.businessName,
-      ),
-    }).catch(emailError => {
-      console.error('Failed to send email to owner:', emailError);
-    });
+    // Welcome the owner. The subject used to say the listing had been
+    // "approved", sent at the instant of registration and before anyone had
+    // looked at anything — an owner reading that reasonably concludes a review
+    // happened. Nothing is reviewed; the listing is live on save, and that is
+    // what this now says.
+    //
+    // Fire-and-forget: a registration that already succeeded must not fail
+    // because SMTP was down.
+    if (isOwner?.email) {
+      const welcomeSubject = `Welcome to Desi Tracker, ${result.businessName}`;
+      sendEmail({
+        email: isOwner.email,
+        subject: welcomeSubject,
+        message: getBusinessWelcomeTemplate(
+          welcomeSubject,
+          result?.businessName,
+          isOwner?.name,
+        ),
+      }).catch(emailError => {
+        console.error('Failed to send welcome email to owner:', emailError);
+      });
+    }
 
     sendEmail({
       email: config.adminEmail,

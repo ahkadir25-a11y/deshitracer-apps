@@ -5,6 +5,7 @@ import jwt, { type Secret, type SignOptions } from 'jsonwebtoken';
 import { MemberAuthRequest } from '../../middlewares/memberAuth';
 import { config } from '../../middlewares/config';
 import handleAsyncRequest from '../../utils/handleAsyncRequest';
+import { resolvePrincipal } from '../../utils/lib/businessAccess';
 
 function signMember(memberId: string) {
   const secret: Secret = config.memberJwtSecret as unknown as Secret;
@@ -33,7 +34,10 @@ export const registerController: RequestHandler = async (req: Request, res: Resp
 
 export const loginController: RequestHandler = async (req: Request, res: Response): Promise<void> => {
   try {
-    const m = await memberService.authenticateMember(req.body.phone, req.body.password);
+    const m = await memberService.authenticateMember(
+      { phone: req.body.phone, email: req.body.email },
+      req.body.password,
+    );
     const token = signMember(m._id.toString());
     res.json({
       token,
@@ -161,7 +165,12 @@ export const getScanHistoryController = handleAsyncRequest(async (req: Request, 
 export const verifyBySlugController = handleAsyncRequest(async (req: Request, res: Response): Promise<void> => {
   const businessId = typeof req.query.businessId === 'string' ? req.query.businessId : undefined;
   const businessName = typeof req.query.businessName === 'string' ? req.query.businessName : undefined;
-  const data = await memberService.verifyBySlug(req.params.slug as string, businessId, businessName);
+  // The QR encodes a public website URL anyone can scan, so this endpoint
+  // has no required auth — but only a signed-in staff/owner (a user token,
+  // not the public/website caller or a member token) should get the phone.
+  const principal = await resolvePrincipal(req);
+  const includePhone = !!principal && principal.role !== 'member';
+  const data = await memberService.verifyBySlug(req.params.slug as string, businessId, businessName, includePhone);
   res.json(data);
 });
 

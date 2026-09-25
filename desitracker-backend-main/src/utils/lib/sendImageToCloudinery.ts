@@ -179,7 +179,7 @@ export const upload = multer({
       cb(null, true);
     } else {
       console.error('Rejected file:', file.originalname, 'Mimetype:', file.mimetype);
-      cb(null, false);
+      cb(new Error('Invalid file type: Only images and videos are allowed') as any, false);
     }
   }
 

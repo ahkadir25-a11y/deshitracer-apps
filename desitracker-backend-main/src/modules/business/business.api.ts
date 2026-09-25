@@ -2,6 +2,7 @@ import { Router } from 'express';
 import auth from '../../middlewares/auth';
 import { USER_ROLE } from '../user/auth/auth.constants';
 import { BusinessControllers } from './business.controller';
+import requirePermission from '../../middlewares/requirePermission';
 
 const router = Router();
 
@@ -22,9 +23,13 @@ router.get('/list', BusinessControllers.getAllBusinessListings);
 router.get('/:slug', BusinessControllers.getSingleBusiness);
 
 // Update a business by slug (Admin only, and Owner)
+// Staff may edit the business profile only when their role says so. The route
+// used to refuse them by role alone, so 'Edit Business Info' was a switch the
+// owner could turn on that could never do anything.
 router.put(
   '/:slug',
-  auth(USER_ROLE.ADMIN, USER_ROLE.BUSINESS_OWNER),
+  auth(USER_ROLE.ADMIN, USER_ROLE.BUSINESS_OWNER, USER_ROLE.STAFF),
+  requirePermission('canEditBusinessInfo'),
   BusinessControllers.updateBusiness,
 );
 

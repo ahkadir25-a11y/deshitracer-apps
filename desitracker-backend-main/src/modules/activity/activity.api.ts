@@ -2,6 +2,7 @@ import { Router } from 'express';
 import auth from '../../middlewares/auth';
 import { USER_ROLE } from '../user/auth/auth.constants';
 import { ActivityControllers } from './activity.controller';
+import requirePermission from '../../middlewares/requirePermission';
 
 const router = Router();
 
@@ -14,12 +15,14 @@ router.post(
 router.get(
   '/feed/:businessId',
   auth(USER_ROLE.ADMIN, USER_ROLE.BUSINESS_OWNER, USER_ROLE.USER, USER_ROLE.STAFF),
+  requirePermission('canViewActivity'),
   ActivityControllers.getActivityByBusiness
 );
 
 router.get(
   '/dashboard/:businessId',
   auth(USER_ROLE.ADMIN, USER_ROLE.BUSINESS_OWNER, USER_ROLE.STAFF),
+  requirePermission('canViewAnalytics'),
   ActivityControllers.getOwnerDashboardStats
 );
 

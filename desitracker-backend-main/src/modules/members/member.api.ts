@@ -30,6 +30,7 @@ import { requireMemberAuth } from '../../middlewares/memberAuth';
 import auth from '../../middlewares/auth';
 import { USER_ROLE } from '../user/auth/auth.constants';
 import { upload } from '../../utils/lib/sendImageToCloudinery';
+import requirePermission from '../../middlewares/requirePermission';
 
 export const MemberRoutes = Router();
 
@@ -70,6 +71,7 @@ MemberRoutes.get(
 MemberRoutes.get(
   '/search',
   auth(USER_ROLE.ADMIN, USER_ROLE.BUSINESS_OWNER, USER_ROLE.STAFF),
+  requirePermission('canViewMembers'),
   pagedSearchMembersController,
 );
 

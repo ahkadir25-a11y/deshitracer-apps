@@ -7,6 +7,8 @@ export interface IMember extends Document {
   phone: string;
   email?: string;
   password: string;
+  passwordResetCode?: string | null;
+  passwordResetCodeExpires?: Date | null;
   city?: string;
   profileImageUrl?: string;
   coverPhotoUrl?: string;
@@ -29,6 +31,10 @@ const MemberSchema = new Schema<IMember>(
     phone: { type: String, required: true, unique: true, index: true },
     email: { type: String, unique: true, sparse: true },
     password: { type: String, required: true, select: false },
+    // In-app reset-code flow, same shape as the User model's equivalent —
+    // see auth.services.ts requestResetCode / resetPasswordWithCode.
+    passwordResetCode: { type: String, select: false, default: null },
+    passwordResetCodeExpires: { type: Date, select: false, default: null },
     city: { type: String },
     profileImageUrl: { type: String },
     coverPhotoUrl: { type: String },

@@ -6,7 +6,8 @@ import httpStatus from 'http-status';
 
 const getNotifications = handleAsyncRequest(async (req: Request, res: Response) => {
   const businessId = req.params.businessId;
-  const result = await NotificationServices.getNotifications(businessId);
+  const viewer = { id: (req as any).user?.id, role: (req as any).user?.role };
+  const result = await NotificationServices.getNotifications(businessId, viewer);
   sendResponse(res, {
     statusCode: httpStatus.OK,
     success: true,
@@ -28,7 +29,8 @@ const markAsRead = handleAsyncRequest(async (req: Request, res: Response) => {
 
 const markAllAsRead = handleAsyncRequest(async (req: Request, res: Response) => {
   const businessId = req.params.businessId;
-  const result = await NotificationServices.markAllAsRead(businessId);
+  const viewer = { id: (req as any).user?.id, role: (req as any).user?.role };
+  const result = await NotificationServices.markAllAsRead(businessId, viewer);
   sendResponse(res, {
     statusCode: httpStatus.OK,
     success: true,

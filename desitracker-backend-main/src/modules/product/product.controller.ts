@@ -303,7 +303,7 @@ function validateDateRange(startRaw: any, endRaw: any, res: Response):
 
 const createDayOffer = async (req: Request, res: Response): Promise<void> => {
   try {
-    const { user_id, business_id, product_category_id, day, discount_percent, start_date, end_date } = req.body;
+    const { user_id, business_id, product_category_id, product_ids, day, discount_percent, start_date, end_date } = req.body;
 
     if (!user_id || !business_id) { res.status(400).json({ error: 'user_id and business_id are required.' }); return; }
     if (!validateDayName(day, res)) return;
@@ -316,6 +316,7 @@ const createDayOffer = async (req: Request, res: Response): Promise<void> => {
       user_id,
       business_id,
       product_category_id,
+      product_ids: Array.isArray(product_ids) ? product_ids : undefined,
       day: normalizeDayOrFail(day),
       discount_percent: Number(discount_percent),
       start_date: (range as any).start,
@@ -324,6 +325,10 @@ const createDayOffer = async (req: Request, res: Response): Promise<void> => {
 
     res.status(201).json(doc);
   } catch (err: any) {
+    // The unique index is gone; a clash is now an explicit, explainable
+    // overlap rather than a database-level duplicate. 11000 is still handled
+    // in case the legacy index survives on an un-migrated database.
+    if (err?.name === 'OfferOverlapError') { res.status(409).json({ error: err.message }); return; }
     if (err?.code === 11000) { res.status(409).json({ error: 'An offer for this weekday already exists for this business.' }); return; }
     res.status(500).json({ error: err?.message || 'Failed to create day offer' });
   }
@@ -381,6 +386,9 @@ const updateDayOffer = async (req: Request, res: Response): Promise<void> => {
     if (req.body.product_category_id !== undefined) {
       updates.product_category_id = req.body.product_category_id || undefined;
     }
+    if (req.body.product_ids !== undefined) {
+      updates.product_ids = Array.isArray(req.body.product_ids) ? req.body.product_ids : [];
+    }
 
     // Unguarded, this let anyone set another restaurant's day offer to 100%
     // off — the same free-food outcome by a different door.
@@ -389,6 +397,7 @@ const updateDayOffer = async (req: Request, res: Response): Promise<void> => {
     if (!updated) { res.status(404).json({ error: 'Day offer not found' }); return; }
     res.status(200).json(updated);
   } catch (err: any) {
+    if (err?.name === 'OfferOverlapError') { res.status(409).json({ error: err.message }); return; }
     if (err?.code === 11000) { res.status(409).json({ error: 'Another offer with this weekday already exists for this business.' }); return; }
     res.status(500).json({ error: err?.message || 'Failed to update day offer' });
   }

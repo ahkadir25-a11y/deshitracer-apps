@@ -4,8 +4,10 @@ import { RotaTimesheet } from './timesheet.model';
 import { IRotaTimesheet } from './timesheet.interface';
 import { RotaEmployee } from '../employee/employee.model';
 import { RotaShift } from '../shift/shift.model';
+import { RotaLeave } from '../leave/leave.model';
 import { RotaTimesheetValidation } from './timesheet.validation';
 import { RotaUtils } from '../rota.utils';
+import { Notification } from '../../notification/notification.model';
 
 // Helpers ─────────────────────────────────────────────────────────────────────
 
@@ -58,6 +60,38 @@ function sumCompletedBreakMinutes(entry: any): number {
   return total;
 }
 
+// Minutes as "7h 5m". Long shifts turn plain minutes into numbers nobody can
+// read at a glance — a mid-shift clock-out on a 00:00-23:30 rota reported 665.
+function humanMinutes(mins: number): string {
+  const total = Math.max(0, Math.floor(Number(mins) || 0));
+  const h = Math.floor(total / 60);
+  const m = total % 60;
+  if (h && m) return `${h}h ${m}m`;
+  if (h) return `${h}h`;
+  return `${m}m`;
+}
+
+// A calendar day, used to collapse several clock-ins on one date into one
+// day for attendance counting.
+function dayKey(d: any): string {
+  const dt = new Date(d);
+  const m = String(dt.getMonth() + 1).padStart(2, '0');
+  const day = String(dt.getDate()).padStart(2, '0');
+  return `${dt.getFullYear()}-${m}-${day}`;
+}
+
+function employeeDisplayName(employee: any): string {
+  // RotaEmployee has no top-level `name` field -- firstName is the only
+  // required identity field on the schema (lastName is optional), so
+  // `employee?.name` here was always undefined. Every employee with no
+  // linked User account (added by the owner without requiring signup, or
+  // invited but not yet accepted) fell straight through to the generic
+  // fallback on every clock-out/early-finish notification, regardless of
+  // whether the owner had typed their name in.
+  const fromEmployee = [employee?.firstName, employee?.lastName].filter(Boolean).join(' ').trim();
+  return fromEmployee || employee?.user?.name || 'A staff member';
+}
+
 function entryStats(entry: any) {
   const rawStart = new Date(entry.clockIn).getTime();
   const rawEnd = entry.clockOut ? new Date(entry.clockOut).getTime() : Date.now();
@@ -90,7 +124,9 @@ function entryStats(entry: any) {
     overtimeMinutes = Math.max(0, Math.floor((otEnd - otStart) / 60000));
   }
 
-  // Excused undertime still counts as paid time.
+  // Excusing a shortfall forgives it — it does not pay for it. Time not worked
+  // is not paid, the same rule breaks follow. Reported here so the owner can
+  // see what was excused; deliberately NOT in payableMinutes.
   let excusedUndertimeMinutes = 0;
   if (entry.undertime && entry.undertime.status === 'EXCUSED') {
     excusedUndertimeMinutes = Math.max(0, Number(entry.undertime.minutes) || 0);
@@ -102,7 +138,10 @@ function entryStats(entry: any) {
     overtimeMinutes,
     impliedOvertimeMinutes: 0,
     excusedUndertimeMinutes,
-    payableMinutes: workedMinutes + overtimeMinutes + excusedUndertimeMinutes,
+    // Matches the weekly total in getMyPaySummary, which never added excused
+    // time either. The two disagreed, so one row could claim minutes the
+    // week they belonged to would not pay.
+    payableMinutes: workedMinutes + overtimeMinutes,
     isOpen: !entry.clockOut,
   };
 }
@@ -129,6 +168,17 @@ export const RotaTimesheetService = {
       if (!shiftDoc) throw new AppError(400, 'Shift not found or not assigned to you');
     } else {
       shiftDoc = await findCurrentOrUpcomingShift(employee._id, dto.business);
+    }
+
+    // No shift on the rota today means no clock-in. The staff card already
+    // greys the button out for this, but only in the app — the endpoint itself
+    // happily created a shiftless entry, so anyone off the rota could still
+    // start a paid, untracked session and unlock every gated screen behind it.
+    if (!shiftDoc) {
+      throw new AppError(
+        400,
+        'You have no shift scheduled today, so you cannot clock in.',
+      );
     }
 
     // Block early clock-in — staff cannot clock in more than 15 mins before exact shift start.
@@ -162,6 +212,28 @@ export const RotaTimesheetService = {
       throw new AppError(409, 'You are already clocked in. Clock out before starting a new entry.');
     }
 
+    // Coming back to the same shift retracts any earlier "finished early"
+    // claim on it. Clocking out mid-shift books the whole remainder as a
+    // shortfall — on a 00:00-23:30 shift, stepping out at 12:25 filed a
+    // 665-minute request against the owner — and returning left that standing
+    // in the approvals queue and on the staff card even though the shift was
+    // being worked after all. The real shortfall, if any, is measured again at
+    // the next clock-out. A decision the owner already made (EXCUSED /
+    // MADE_UP) is never touched.
+    const shiftEndsAt = shiftDoc?.endAt ? new Date(shiftDoc.endAt).getTime() : null;
+    if (!shiftEndsAt || Date.now() < shiftEndsAt) {
+      await RotaTimesheet.updateMany(
+        {
+          business: dto.business,
+          employee: employee._id,
+          shift: shiftDoc._id,
+          isDeleted: false,
+          'undertime.status': { $in: ['PENDING_EXCUSE', 'MUST_MAKEUP'] },
+        },
+        { $set: { undertime: null } },
+      );
+    }
+
     const doc = await RotaTimesheet.create({
       business: dto.business,
       employee: employee._id,
@@ -179,6 +251,7 @@ export const RotaTimesheetService = {
   async clockOut(userId: string, payload: any) {
     const dto = RotaTimesheetValidation.clockOut(payload);
     const employee = await findMyEmployee(userId, dto.business);
+    await employee.populate('user', 'name');
 
     const open = await RotaTimesheet.findOne({
       business: dto.business,
@@ -215,6 +288,31 @@ export const RotaTimesheetService = {
           decidedAt: null,
           decisionNote: '',
         } as any;
+
+        // Say what happened, not what it means. "Finished early, waiting for
+        // your decision" stops being true the moment the staff member clocks
+        // back in — the claim is retracted on return, but a notification
+        // already sent cannot be, so the owner was left reading an alarm about
+        // a shift that was in fact worked. "Clocked out mid-shift" is true
+        // either way. Whether the time is owed is decided in Approvals, which
+        // empties itself when they return.
+        //
+        // Never let this stop the clock-out.
+        try {
+          const who = employeeDisplayName(employee);
+          await Notification.create({
+            business: dto.business,
+            audience: 'OWNER',
+            title: 'Clocked out mid-shift',
+            message: dto.undertimeReason
+              ? `${who} clocked out ${humanMinutes(minutesShort)} before their shift ends. Reason: "${dto.undertimeReason}"`
+              : `${who} clocked out ${humanMinutes(minutesShort)} before their shift ends, with no reason given.`,
+            type: 'SYSTEM',
+            link: { screen: 'Approvals', params: { businessId: dto.business } },
+          });
+        } catch (err) {
+          console.error('[Undertime notification error]:', err);
+        }
       }
     }
 
@@ -359,6 +457,7 @@ export const RotaTimesheetService = {
   async submitUndertimeReason(userId: string, id: string, payload: any) {
     const dto = RotaTimesheetValidation.submitUndertime(payload);
     const employee = await findMyEmployee(userId, dto.business);
+    await employee.populate('user', 'name');
 
     const entry = await RotaTimesheet.findOne({
       _id: id,
@@ -375,6 +474,23 @@ export const RotaTimesheetService = {
     entry.undertime.reason = dto.reason;
     entry.undertime.status = 'PENDING_EXCUSE';
     await entry.save();
+
+    // Same reason as on clock-out: the request is now waiting on the owner, so
+    // it has to reach them somewhere they actually look.
+    try {
+      const who = employeeDisplayName(employee);
+      await Notification.create({
+        business: dto.business,
+        audience: 'OWNER',
+        title: 'Early finish — reason submitted',
+        message: `${who} explained finishing ${humanMinutes(entry.undertime.minutes)} early: "${dto.reason}". Waiting for your decision.`,
+        type: 'SYSTEM',
+        link: { screen: 'Approvals', params: { businessId: dto.business } },
+      });
+    } catch (err) {
+      console.error('[Undertime reason notification error]:', err);
+    }
+
     return entry.populate(['employee', 'shift']);
   },
 
@@ -420,7 +536,38 @@ export const RotaTimesheetService = {
     entry.undertime.decidedAt = new Date();
     entry.undertime.decisionNote = dto.decisionNote ?? '';
     await entry.save();
-    return entry.populate(['employee', 'shift']);
+    const decided = await entry.populate([
+      { path: 'employee', populate: { path: 'user', select: 'name' } },
+      'shift',
+    ]);
+
+    // Close the loop. The staff member asked to be excused and then had no way
+    // to learn the answer except by reopening the app and reading their own
+    // shift card, so an owner's decision could sit unseen for days.
+    try {
+      const who = employeeDisplayName(decided.employee as any);
+      const staffUserId = (decided.employee as any)?.user?._id
+        || (decided.employee as any)?.user
+        || null;
+      const mins = humanMinutes(entry.undertime.minutes);
+      const outcome =
+        nextStatus === 'EXCUSED' ? `excused ${who}'s ${mins} early finish` :
+        nextStatus === 'MADE_UP' ? `marked ${who}'s ${mins} as made up` :
+        `asked ${who} to make up ${mins} another day`;
+      await Notification.create({
+        business,
+        user: staffUserId,
+        audience: 'STAFF',
+        title: nextStatus === 'MUST_MAKEUP' ? 'Early finish not excused' : 'Early finish excused',
+        message: `Your employer ${outcome}.${entry.undertime.decisionNote ? ` Note: "${entry.undertime.decisionNote}"` : ''}`,
+        type: 'SYSTEM',
+        link: { screen: 'StaffMyTimesheet', params: { businessId: business } },
+      });
+    } catch (err) {
+      console.error('[Undertime decision notification error]:', err);
+    }
+
+    return decided;
   },
 
   // OWNER — All open ("stuck") timesheets older than the threshold. Likely
@@ -511,11 +658,17 @@ export const RotaTimesheetService = {
     let overtimeMinutes = 0;
     let pendingOvertimeMinutes = 0;
     let undertimeMinutes = 0;
+    let breakMinutes = 0;
     const rows: any[] = [];
+    // Which calendar days were actually worked, for the attendance count below.
+    const workedDaySet = new Set<string>();
 
     for (const e of entries) {
       const stats = entryStats(e);
       workedMinutes += stats.workedMinutes;
+      breakMinutes += Math.max(0, Number(e.breakMinutes) || 0)
+        + sumCompletedBreakMinutes(e);
+      workedDaySet.add(dayKey(e.clockIn));
       overtimeMinutes += stats.overtimeMinutes;
       undertimeMinutes += (e.undertime?.status === 'MUST_MAKEUP') ? (e.undertime?.minutes || 0) : 0;
       if (e.overtime?.status === 'PENDING' && e.overtime.endAt) {
@@ -538,6 +691,55 @@ export const RotaTimesheetService = {
     const payableMinutes = workedMinutes + overtimeMinutes;
     const pay = +((payableMinutes / 60) * hourlyWage).toFixed(2);
 
+    // Attendance. A day counts as scheduled if the rota has a shift starting on
+    // it; absent means scheduled but never clocked into. Approved leave is not
+    // absence — someone whose time off was granted must not be counted against,
+    // so those days are reported separately and taken out of the absent count.
+    const [shifts, leaves] = await Promise.all([
+      RotaShift.find({
+        business, employee: employee._id, isDeleted: false,
+        startAt: { $gte: from, $lt: to },
+      }).select('startAt endAt').lean(),
+      RotaLeave.find({
+        business, employee: employee._id, status: 'APPROVED',
+        startDate: { $lt: to }, endDate: { $gte: from },
+      }).select('startDate endDate').lean(),
+    ]);
+
+    const leaveDaySet = new Set<string>();
+    for (const l of leaves as any[]) {
+      const cursor = new Date(Math.max(new Date(l.startDate).getTime(), from.getTime()));
+      const last = Math.min(new Date(l.endDate).getTime(), to.getTime() - 1);
+      while (cursor.getTime() <= last) {
+        leaveDaySet.add(dayKey(cursor));
+        cursor.setDate(cursor.getDate() + 1);
+      }
+    }
+
+    // Two different questions, and answering both with one set was wrong.
+    // scheduledDaySet is "how many shifts are on the rota this period", which
+    // includes ones still to come. Absence can only be judged on a shift that
+    // has already finished — asked on the 2nd of the month, the old count
+    // called every remaining day of September an absence. A shift still
+    // running is not missed either; someone can clock in until it ends.
+    const nowMs = Date.now();
+    const scheduledDaySet = new Set<string>();
+    const finishedDaySet = new Set<string>();
+    for (const sh of shifts as any[]) {
+      const key = dayKey(sh.startAt);
+      scheduledDaySet.add(key);
+      const endsAt = sh.endAt ? new Date(sh.endAt).getTime() : null;
+      if (endsAt !== null && endsAt <= nowMs) finishedDaySet.add(key);
+    }
+
+    let absentDays = 0;
+    let leaveDays = 0;
+    for (const day of finishedDaySet) {
+      if (workedDaySet.has(day)) continue;
+      if (leaveDaySet.has(day)) { leaveDays += 1; continue; }
+      absentDays += 1;
+    }
+
     return {
       from: from.toISOString(),
       to: to.toISOString(),
@@ -546,8 +748,15 @@ export const RotaTimesheetService = {
       overtimeMinutes,
       pendingOvertimeMinutes,
       undertimeMinutes,
+      breakMinutes,
       payableMinutes,
       pay,
+      scheduledDays: scheduledDaySet.size,
+      // Days the attendance verdict is actually based on.
+      finishedDays: finishedDaySet.size,
+      workedDays: workedDaySet.size,
+      absentDays,
+      leaveDays,
       rows,
     };
   },

@@ -4,8 +4,10 @@ import cors from 'cors';
 import express, { Application, Request, Response } from 'express';
 import helmet from 'helmet';
 import mongoSanitize from 'express-mongo-sanitize';
-import rateLimit from 'express-rate-limit';
+import rateLimit, { ipKeyGenerator } from 'express-rate-limit';
+import jwt, { JwtPayload } from 'jsonwebtoken';
 import router from './routes';
+import config from './config';
 
 import globalErrorHandler from './middlewares/globalErrorHandler';
 import notFound from './middlewares/notFound';
@@ -58,12 +60,40 @@ app.use(express.json({ limit: '5mb' }));
 app.use(mongoSanitize());
 
 // Global rate limit — coarse backstop against abuse/DoS.
+//
+// Keyed by signed-in user rather than by IP. Every member of staff at one
+// venue shares a single public address, so an IP bucket is really a whole
+// restaurant's bucket: five people on the same wifi during service were
+// spending one allowance between them and hitting the limit in ordinary use.
+// The dashboard alone is ten requests each time it comes into focus.
+//
+// The token is verified, not just read, so a forged or expired one cannot mint
+// a fresh bucket — it falls back to the IP like any other anonymous caller.
+const rateLimitKey = (req: Request): string => {
+  const header = req.headers.authorization;
+  const raw = header?.startsWith('Bearer ') ? header.slice(7) : header;
+  if (raw && config.jwt.accessSecret) {
+    try {
+      const decoded = jwt.verify(raw, config.jwt.accessSecret as string) as JwtPayload;
+      const id = decoded?.id || decoded?._id || decoded?.userId;
+      if (id) return `u:${id}`;
+    } catch {
+      // Not a valid session — fall through and treat it as anonymous.
+    }
+  }
+  return `ip:${ipKeyGenerator(req.ip || '')}`;
+};
+
 app.use(
   rateLimit({
     windowMs: 60 * 1000,
-    max: 200,
+    // Headroom for a screen that fans out to ten endpoints and a person moving
+    // briskly between screens, while still stopping anything running away.
+    max: 600,
+    keyGenerator: rateLimitKey,
     standardHeaders: true,
     legacyHeaders: false,
+    message: { success: false, message: 'Too many requests. Please wait a moment and try again.' },
   }),
 );
 
@@ -85,6 +115,15 @@ app.use('/api/v1/auth/forgot-password-code', authLimiter);
 app.use('/api/v1/auth/reset-password', authLimiter);
 app.use('/api/v1/auth/reset-password-code', authLimiter);
 app.use('/api/v1/members/login', authLimiter);
+
+// Registration is necessarily public AND accepts a file upload
+// (users/register runs multer's upload.single('file') before any auth), so
+// without its own limit the only thing standing between an anonymous caller
+// and the disk / Cloudinary quota was the 600-a-minute global cap. Account
+// creation is not something a real person does repeatedly, so it gets the
+// tighter budget the credential endpoints use.
+app.use('/api/v1/users/register', authLimiter);
+app.use('/api/v1/members/register', authLimiter);
 
 app.use('/api/v1', router);
 

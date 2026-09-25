@@ -13,6 +13,10 @@ const IngredientSchema = new Schema<TIngredient>(
   { timestamps: true },
 );
 
+// Every read is scoped to one business; without this the lookup scans the whole
+// collection.
+IngredientSchema.index({ business: 1, name: 1 });
+
 export const Ingredient = model<TIngredient>('Ingredient', IngredientSchema);
 
 const StockHistorySchema = new Schema<TStockHistory>(
@@ -26,5 +30,10 @@ const StockHistorySchema = new Schema<TStockHistory>(
   },
   { timestamps: true },
 );
+
+// History is always fetched per business, newest first.
+StockHistorySchema.index({ business: 1, createdAt: -1 });
+// Deleting an ingredient cascades to its history rows.
+StockHistorySchema.index({ ingredient: 1 });
 
 export const StockHistory = model<TStockHistory>('StockHistory', StockHistorySchema);

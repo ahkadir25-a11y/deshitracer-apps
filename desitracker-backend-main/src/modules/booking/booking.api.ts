@@ -4,6 +4,7 @@ import auth from '../../middlewares/auth';
 import { USER_ROLE } from '../user/auth/auth.constants';
 import { requireBusinessAccess } from '../../utils/lib/businessAccess';
 import { createBooking, getBookingsByBusiness, updateBooking, deleteBooking } from './booking.controller'; // Import controller functions
+import requirePermission from '../../middlewares/requirePermission';
 
 const router = Router();  // Initialize the router
 
@@ -29,12 +30,12 @@ router.post('/create', createLimiter, asyncHandler(createBooking));
 
 // Get bookings by business ID — exposes customer PII, so it's locked to the
 // owner/staff of THAT business (or admin).
-router.get('/business/:businessId', staff, requireBusinessAccess, asyncHandler(getBookingsByBusiness));
+router.get('/business/:businessId', staff, requirePermission('canManageBookings'), requireBusinessAccess, asyncHandler(getBookingsByBusiness));
 
 // Update / delete a booking — staff/owner only. The controller loads the
 // booking and verifies the caller belongs to the booking's business.
-router.put('/:id', staff, asyncHandler(updateBooking));
-router.delete('/:id', staff, asyncHandler(deleteBooking));
+router.put('/:id', staff, requirePermission('canManageBookings'), asyncHandler(updateBooking));
+router.delete('/:id', staff, requirePermission('canManageBookings'), asyncHandler(deleteBooking));
 
 // Export the router so that it can be used in other parts of the app
 export default router;

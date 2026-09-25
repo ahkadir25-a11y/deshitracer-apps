@@ -13,6 +13,7 @@ import { Types } from 'mongoose';
 import { MemberLead } from './member.lead.model';
 import DayOffer from "../product/dayOffer.model";
 import sendEmail from '../../utils/lib/sendEmail';
+import { getMemberWelcomeTemplate } from './member.template';
 import { User } from '../user/user/user.model';
 
 // small helper: chunk array
@@ -378,11 +379,43 @@ export async function registerMember(payload: {
     qrSlug: slug,
     qrCodeUrl,
   });
+
+  // Say hello, but only if we were given somewhere to say it. Email is
+  // optional at member registration — most members sign up with a phone
+  // number alone — so this stays silent rather than guessing an address.
+  //
+  // Fire-and-forget on purpose: the member already exists at this point, and
+  // an SMTP failure must never turn a completed registration into an error.
+  if (m.email) {
+    const subject = 'Welcome to Desi Tracker';
+    sendEmail({
+      email: m.email,
+      subject,
+      message: getMemberWelcomeTemplate(subject, m.name, m.serialNumber),
+    }).catch(emailError => {
+      console.error('Failed to send welcome email to member:', emailError);
+    });
+  }
+
   return m;
 }
 
-export async function authenticateMember(phone: string, password: string): Promise<IMember> {
-  const m = await Member.findOne({ phone, deletedAt: null }).select('+password');
+// The login screen offers phone OR email and sends whichever was typed — see
+// MemberLoginScreen, which detects the format client-side and posts
+// { phone } or { email }. This only ever read `phone`, so an email login
+// looked up `Member.findOne({ phone: undefined })`, which Mongoose strips to
+// "any member" rather than "no member" — the wrong account, or none, either
+// way never the one that was typed in. Accept whichever identifier was sent.
+export async function authenticateMember(
+  identifier: { phone?: string; email?: string },
+  password: string,
+): Promise<IMember> {
+  const { phone, email } = identifier;
+  if (!phone && !email) throw new Error('Invalid credentials');
+  const query = phone
+    ? { phone, deletedAt: null }
+    : { email: String(email).toLowerCase(), deletedAt: null };
+  const m = await Member.findOne(query).select('+password');
   if (!m) throw new Error('Invalid credentials');
   const ok = await bcrypt.compare(password, m.password);
   if (!ok) throw new Error('Invalid credentials');
@@ -435,7 +468,12 @@ export async function deleteMember(id: string) {
   await Member.findByIdAndDelete(id);
 }
 
-export async function verifyBySlug(slug: string, businessId?: string, businessName?: string) {
+export async function verifyBySlug(
+  slug: string,
+  businessId?: string,
+  businessName?: string,
+  includePhone?: boolean,
+) {
   const m = await Member.findOne({ qrSlug: slug });
   if (!m || m.deletedAt) return { valid: false };
 
@@ -451,7 +489,10 @@ export async function verifyBySlug(slug: string, businessId?: string, businessNa
     valid: m.active && !m.deletedAt,
     name: m.name,
     profileImageUrl: m.profileImageUrl,
-    phone: m.phone,
+    // Only staff/owners scanning in-app get the phone number — the QR is a
+    // public website URL anyone can scan, so an unauthenticated caller
+    // (e.g. the public verify page) must not receive it.
+    ...(includePhone ? { phone: m.phone } : {}),
     serialNumber: m?.serialNumber,
     verification: m.active ? 'Active member' : 'Inactive member'
   };

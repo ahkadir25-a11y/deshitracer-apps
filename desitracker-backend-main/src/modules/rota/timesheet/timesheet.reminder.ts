@@ -193,16 +193,25 @@ export async function runAutomaticOvertimeTransition(): Promise<{
   return { checked: candidates.length, transitioned, failed };
 }
 
+// A clock-in with no shift attached (clocked in on a day with nothing on the
+// rota) has no shift end to clamp against — entryStats() falls back to the raw
+// clockIn/clockOut span with no ceiling, so a forgotten clock-out here does not
+// just miss a reminder, it accrues payable hours with no upper bound. This cap
+// is that upper bound: after this many hours with no shift, force a close.
+const MAX_SHIFTLESS_HOURS = Math.max(1, Number(process.env.MAX_SHIFTLESS_CLOCKIN_HOURS) || 12);
+
 // Automatic Clock-Out Job
 //
-// Safety net for staff who forget to clock out. Finds open timesheets where the
-// scheduled shift ended more than AUTO_CLOCKOUT_GRACE_MIN minutes ago and the
-// staff is NOT on overtime, then closes them by setting clockOut = shiftEnd.
+// Safety net for staff who forget to clock out. Two independent sweeps:
+//   1. Shift-attached entries: closed at shiftEnd once the scheduled shift
+//      ended more than AUTO_CLOCKOUT_GRACE_MIN minutes ago (as before).
+//   2. Shiftless entries: closed at clockIn + MAX_SHIFTLESS_HOURS once that cap
+//      is reached, since there is no shiftEnd to close them at instead.
 //
-// Why shiftEnd (not "now")? Paid hours are already capped at the shift end in
-// the worked-minutes calc, so closing at shiftEnd keeps the record consistent
-// and never pays for the forgotten extra hours. Owner-mandated / staff overtime
-// is intentionally left running and is never auto-closed here.
+// Why shiftEnd (not "now") for #1? Paid hours are already capped at the shift
+// end in the worked-minutes calc, so closing at shiftEnd keeps the record
+// consistent and never pays for the forgotten extra hours. Owner-mandated /
+// staff overtime is intentionally left running and is never auto-closed here.
 export async function runAutoClockOut(): Promise<{
   checked: number;
   closed: number;
@@ -267,5 +276,42 @@ export async function runAutoClockOut(): Promise<{
     }
   }
 
-  return { checked: candidates.length, closed, failed };
+  // Sweep 2: shiftless entries past the cap. Independent query, independent
+  // counters folded into the same totals — a forgotten shiftless clock-in is
+  // exactly the case the shift-attached sweep above cannot see.
+  const capCutoff = new Date(now.getTime() - MAX_SHIFTLESS_HOURS * 60 * 60 * 1000);
+  const shiftlessCandidates = await RotaTimesheet.find({
+    clockOut: null,
+    isDeleted: false,
+    shift: null,
+    clockIn: { $lte: capCutoff },
+    'overtime.status': { $nin: ['RUNNING', 'PENDING', 'APPROVED'] },
+  }).lean({ virtuals: false });
+
+  for (const ts of shiftlessCandidates) {
+    const clockIn = new Date((ts as any).clockIn);
+    const cappedClockOut = new Date(clockIn.getTime() + MAX_SHIFTLESS_HOURS * 60 * 60 * 1000);
+
+    try {
+      await RotaTimesheet.updateOne(
+        { _id: (ts as any)._id, clockOut: null },
+        {
+          $set: {
+            clockOut: cappedClockOut,
+            autoClockedOut: true,
+            'breaks.$[open].endAt': cappedClockOut,
+          },
+        },
+        { arrayFilters: [{ 'open.endAt': null }] },
+      );
+      closed += 1;
+    } catch (err: any) {
+      failed += 1;
+      console.error(
+        `[autoClockOut] failed for shiftless timesheet ${(ts as any)._id}: ${err?.message}`,
+      );
+    }
+  }
+
+  return { checked: candidates.length + shiftlessCandidates.length, closed, failed };
 }

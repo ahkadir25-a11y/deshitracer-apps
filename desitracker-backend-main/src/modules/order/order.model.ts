@@ -122,6 +122,19 @@ const OrderSchema = new Schema(
     totalQty: { type: Number, required: true, default: 0 },
     subtotal: { type: Number, required: true, default: 0 },
 
+    // Set when the customer placing this order is a registered member (via
+    // staff lookup, or a self-checkout while signed in as a member) -- lets
+    // the owner tell a member's order apart from a guest's. Was previously
+    // sent by the frontend but never captured here, so it was silently
+    // dropped on every order.
+    memberSerial: { type: String, default: null },
+    // The member's own id, indexed so their app can find this order later.
+    // user_id means "which owner's products" on a staff-placed order (see
+    // comment above), not "which customer" -- a member seated by staff and
+    // looked up by serial had no field anywhere linking the order back to
+    // them, so it could never appear in their own order history.
+    member: { type: Types.ObjectId, ref: "Member", default: null, index: true },
+
     membershipDiscount: {
       applied: { type: Boolean, default: false },
       percent: { type: Number, default: 0 },

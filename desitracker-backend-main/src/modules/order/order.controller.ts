@@ -18,6 +18,8 @@ const createOrder = async (req: Request, res: Response) => {
       items,
       totals,
       membershipDiscount,
+      memberSerial,
+      member_id,
       currency,
       status,
       customerName,
@@ -40,17 +42,47 @@ const createOrder = async (req: Request, res: Response) => {
       return;
     }
 
+    // Order type is what separates a table, a collection and a doorstep. The
+    // API used to accept a delivery with no address and no phone, so a broken
+    // order could be written by any client. Enforce it here, not only in the
+    // apps.
+    const type = orderType || "dine-in";
+    if (!["dine-in", "takeaway", "delivery"].includes(type)) {
+      res.status(400).json({ error: "orderType must be dine-in, takeaway or delivery." });
+      return;
+    }
+    if (type !== "dine-in") {
+      // Nobody is at a table: the phone number is the only way to reach them.
+      if (!String(customerName || "").trim()) {
+        res.status(400).json({ error: "customerName is required for pickup and delivery orders." });
+        return;
+      }
+      if (!String(customerPhone || "").trim()) {
+        res.status(400).json({ error: "customerPhone is required for pickup and delivery orders." });
+        return;
+      }
+    }
+    if (type === "delivery" && !String(deliveryAddress || "").trim()) {
+      res.status(400).json({ error: "deliveryAddress is required for delivery orders." });
+      return;
+    }
+
     const created = await orderService.createOrder({
       business_id,
       user_id,
       staffUserId: staffUserId || undefined,
       staffName: staffName || "",
       businessName,
-      tableNo,
+      // A table number only means something for dine-in. Carrying one on a
+      // pickup order made the service occupy — and later free — a table that
+      // nobody ever sat at.
+      tableNo: type === "dine-in" ? tableNo : "",
       notes,
       items,
       totalQty: Number(totals?.totalQty || 0),
       subtotal: Number(totals?.subtotal || 0),
+      memberSerial: memberSerial || null,
+      member: member_id || null,
       membershipDiscount: membershipDiscount || {
         applied: false,
         percent: 0,
@@ -64,7 +96,7 @@ const createOrder = async (req: Request, res: Response) => {
       customerPhone: customerPhone || "",
       customerEmail: customerEmail || "",
       guestCount: guestCount ? Number(guestCount) : 0,
-      orderType: orderType || "dine-in",
+      orderType: type,
       deliveryAddress: deliveryAddress || "",
       deliveryFee: deliveryFee ? Number(deliveryFee) : 0,
       requestedTime: requestedTime || "",
@@ -78,24 +110,27 @@ const createOrder = async (req: Request, res: Response) => {
 
 const listOrders = async (req: Request, res: Response) => {
   try {
-    const { business_id, user_id, status, from, to, limit } = (req.query as any) as {
+    const { business_id, user_id, member_id, status, from, to, limit } = (req.query as any) as {
       business_id?: string;
       user_id?: string;
+      member_id?: string;
       status?: string;
       from?: string;
       to?: string;
       limit?: string;
     };
 
-    // Allow listing by business (staff/owner view) OR by user (a member's
-    // own order history across businesses). At least one scope is required
-    // so we never return the whole orders collection.
-    if (!business_id && !user_id) {
-      res.status(400).json({ error: "business_id or user_id is required." });
+    // Allow listing by business (staff/owner view), by user (a regular
+    // customer's own history), or by member (a member's own history --
+    // separate from user_id because a staff-placed order's user_id is the
+    // business owner, not the member who was seated). At least one scope is
+    // required so we never return the whole orders collection.
+    if (!business_id && !user_id && !member_id) {
+      res.status(400).json({ error: "business_id, user_id or member_id is required." });
       return;
     }
 
-    const items = await orderService.listOrders({ business_id, user_id, status, from, to, limit });
+    const items = await orderService.listOrders({ business_id, user_id, member_id, status, from, to, limit });
     res.status(200).json(items);
   } catch (err: any) {
     res.status(500).json({ error: err?.message || "Failed to fetch orders" });

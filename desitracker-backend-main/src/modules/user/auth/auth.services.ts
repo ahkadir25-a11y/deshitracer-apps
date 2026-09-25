@@ -1,11 +1,13 @@
 import fs from 'fs';
-import { JwtPayload } from 'jsonwebtoken';
+import jwt, { JwtPayload } from 'jsonwebtoken';
 import path from 'path';
 import config from '../../../config';
 import AppError from '../../../errors/AppError';
 import { JwtHelpers, TJwtPayload } from '../../../utils/jwt';
 import sendEmail from '../../../utils/lib/sendEmail';
 import { User } from '../user/user.model';
+import { Member } from '../../members/member.model';
+import { config as memberConfig } from '../../../middlewares/config';
 import { TLoginPayloadData } from './auth.interface';
 
 // Login User
@@ -155,31 +157,56 @@ const resetPassword = async (
 
 const RESET_CODE_TTL_MIN = 10;
 
-const requestResetCode = async ({ email }: { email: string }) => {
-  const user = await User.findOne({ email: email?.toLowerCase() });
-  // Don't reveal whether the email exists — always behave the same.
-  if (!user) {
-    return { sent: true };
-  }
-
-  const code = String(Math.floor(100000 + Math.random() * 900000)); // 6 digits
-  user.passwordResetCode = code;
-  user.passwordResetCodeExpires = new Date(Date.now() + RESET_CODE_TTL_MIN * 60 * 1000);
-  await user.save({ validateBeforeSave: false });
-
-  await sendEmail({
-    email: user.email,
-    subject: `${config.companyName} password reset code`,
-    message: `
+function resetCodeEmailHtml(code: string) {
+  return `
       <div style="font-family: Arial, sans-serif; max-width: 480px; margin: 0 auto; padding: 24px;">
         <h2 style="color:#0f172a; margin:0 0 12px;">Your password reset code</h2>
         <p style="color:#334155; font-size:14px;">Use this code in the app to set a new password:</p>
         <div style="font-size:32px; font-weight:bold; letter-spacing:8px; color:#5B4FE8; text-align:center; margin:18px 0;">${code}</div>
         <p style="color:#64748b; font-size:12px;">This code expires in ${RESET_CODE_TTL_MIN} minutes. If you didn't request it, you can ignore this email.</p>
       </div>
-    `,
-  });
+    `;
+}
 
+// The forgot-password screen is the same for every role and only ever
+// collects an email — there was no member equivalent of this at all, so a
+// member requesting a reset silently fell through: the lookup only checked
+// Users, found nothing, and the screen sat there as if an email had been
+// sent. User and Member are two different collections but the same email
+// cannot register both (member.service.ts checks the User table before
+// letting a signup through), so trying User then Member is unambiguous —
+// never both, never neither by coincidence.
+const requestResetCode = async ({ email }: { email: string }) => {
+  const lower = email?.toLowerCase();
+  const code = String(Math.floor(100000 + Math.random() * 900000)); // 6 digits
+
+  const user = await User.findOne({ email: lower });
+  if (user) {
+    user.passwordResetCode = code;
+    user.passwordResetCodeExpires = new Date(Date.now() + RESET_CODE_TTL_MIN * 60 * 1000);
+    await user.save({ validateBeforeSave: false });
+    await sendEmail({
+      email: user.email,
+      subject: `${config.companyName} password reset code`,
+      message: resetCodeEmailHtml(code),
+    });
+    return { sent: true };
+  }
+
+  const member = await Member.findOne({ email: lower });
+  if (member) {
+    member.passwordResetCode = code;
+    member.passwordResetCodeExpires = new Date(Date.now() + RESET_CODE_TTL_MIN * 60 * 1000);
+    await member.save({ validateBeforeSave: false });
+    await sendEmail({
+      email: member.email as string,
+      subject: `${config.companyName} password reset code`,
+      message: resetCodeEmailHtml(code),
+    });
+    return { sent: true };
+  }
+
+  // Don't reveal whether the email exists — always behave the same.
   return { sent: true };
 };
 
@@ -199,36 +226,77 @@ const resetPasswordWithCode = async ({
     throw new AppError(400, 'Password should be at least 8 characters');
   }
 
-  const user = await User.findOne({ email: email.toLowerCase() }).select(
+  const lower = email.toLowerCase();
+
+  // User checked first, exactly as before — this branch's behaviour and every
+  // one of its error messages are unchanged for an owner/staff/admin account.
+  const user = await User.findOne({ email: lower }).select(
     '+passwordResetCode +passwordResetCodeExpires',
   );
-  if (!user || !user.passwordResetCode || !user.passwordResetCodeExpires) {
-    throw new AppError(400, 'No reset request found. Please request a new code.');
-  }
-  if (user.passwordResetCodeExpires.getTime() < Date.now()) {
-    throw new AppError(400, 'This code has expired. Please request a new one.');
-  }
-  if (String(user.passwordResetCode) !== String(code).trim()) {
-    throw new AppError(400, 'Incorrect code. Please check and try again.');
+  if (user) {
+    if (!user.passwordResetCode || !user.passwordResetCodeExpires) {
+      throw new AppError(400, 'No reset request found. Please request a new code.');
+    }
+    if (user.passwordResetCodeExpires.getTime() < Date.now()) {
+      throw new AppError(400, 'This code has expired. Please request a new one.');
+    }
+    if (String(user.passwordResetCode) !== String(code).trim()) {
+      throw new AppError(400, 'Incorrect code. Please check and try again.');
+    }
+
+    user.password = newPassword;
+    user.passwordResetCode = null;
+    user.passwordResetCodeExpires = null;
+    await user.save();
+
+    const jwtPayloadData: TJwtPayload = {
+      id: user._id.toString(),
+      role: user.role,
+      email: user.email,
+    };
+    const accessToken = JwtHelpers.createToken(
+      jwtPayloadData,
+      config.jwt.accessSecret as string,
+      config.jwt.accessExpiresIn,
+    );
+
+    return { accessToken };
   }
 
-  user.password = newPassword;
-  user.passwordResetCode = null;
-  user.passwordResetCodeExpires = null;
-  await user.save();
-
-  const jwtPayloadData: TJwtPayload = {
-    id: user._id.toString(),
-    role: user.role,
-    email: user.email,
-  };
-  const accessToken = JwtHelpers.createToken(
-    jwtPayloadData,
-    config.jwt.accessSecret as string,
-    config.jwt.accessExpiresIn,
+  // No User with this email — try Member. Same verification, same error
+  // wording, a member-shaped token signed with the member secret so the
+  // response stays structurally valid for whichever account type matched.
+  const member = await Member.findOne({ email: lower }).select(
+    '+passwordResetCode +passwordResetCodeExpires',
   );
+  if (member) {
+    if (!member.passwordResetCode || !member.passwordResetCodeExpires) {
+      throw new AppError(400, 'No reset request found. Please request a new code.');
+    }
+    if (member.passwordResetCodeExpires.getTime() < Date.now()) {
+      throw new AppError(400, 'This code has expired. Please request a new one.');
+    }
+    if (String(member.passwordResetCode) !== String(code).trim()) {
+      throw new AppError(400, 'Incorrect code. Please check and try again.');
+    }
 
-  return { accessToken };
+    member.password = newPassword;
+    member.passwordResetCode = null;
+    member.passwordResetCodeExpires = null;
+    await member.save();
+
+    // Matches signMember() in member.controller.ts exactly, so a member who
+    // resets their password gets the same shape of token a normal login would.
+    const accessToken = jwt.sign(
+      { id: member._id.toString(), type: 'member' },
+      memberConfig.memberJwtSecret as string,
+      { expiresIn: memberConfig.memberJwtExpiresIn as any },
+    );
+
+    return { accessToken };
+  }
+
+  throw new AppError(400, 'No reset request found. Please request a new code.');
 };
 
 export const AuthServices = {

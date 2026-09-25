@@ -1,6 +1,7 @@
 import { Types } from 'mongoose';
 import { Order } from "./order.model";
 import { Table } from "../table/table.model";
+import { Business } from "../business/business.model";
 import { getSocketIO } from "../../utils/socket";
 import AppError from "../../errors/AppError";
 import { sendExpoPush } from "../../utils/lib/push";
@@ -80,6 +81,24 @@ export const createOrder = async (payload: any) => {
   // Set default initial statuses
   payload.status = "pending";
   payload.paymentStatus = "UNPAID";
+
+  // The currency belongs to the business, not to whatever the client had in
+  // hand. Orders used to be stamped with the currency saved on a product,
+  // which is a snapshot of what the business traded in when that product was
+  // added — so an owner who set rupees still got dollars on new bills, and a
+  // single business ended up with orders in three currencies that revenue
+  // then summed as if they were one.
+  try {
+    const biz = await Business.findById(payload.business_id).select("currency");
+    if (biz?.currency) {
+      payload.currency = biz.currency;
+      if (Array.isArray(payload.items)) {
+        payload.items.forEach((it: any) => { it.currency = biz.currency; });
+      }
+    }
+  } catch {
+    // Keep what the client sent rather than failing the order over a symbol.
+  }
 
   // Flatten totals from nested payload (frontend sends { totals: { totalQty, subtotal, grandTotal } })
   if (payload.totals) {
@@ -379,6 +398,7 @@ const MAX_ORDER_PAGE = 2000;
 export const listOrders = async ({
   business_id,
   user_id,
+  member_id,
   status,
   from,
   to,
@@ -386,6 +406,7 @@ export const listOrders = async ({
 }: {
   business_id?: string;
   user_id?: string;
+  member_id?: string;
   status?: string;
   from?: string;
   to?: string;
@@ -394,6 +415,7 @@ export const listOrders = async ({
   const q: any = {};
   if (business_id) q.business_id = business_id;
   if (user_id) q.user_id = user_id;
+  if (member_id) q.member = member_id;
   if (status) q.status = status;
 
   const range: any = {};

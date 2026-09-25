@@ -1,3 +1,5 @@
+import { emailShell, esc } from '../../utils/lib/emailShell';
+
 export const getRegistrationReceivedTemplate = (
   subject: string,
   businessName: string,
@@ -146,4 +148,35 @@ export const getBusinessApprovedTemplate = (
     </div>
   </body>
 </html>`;
+};
+
+// Sent the moment a business is registered.
+//
+// Not to be confused with getBusinessApprovedTemplate above: nothing is
+// reviewed or approved today — a listing goes live on save — so telling the
+// owner their listing was "approved", or that a team will look at it within 24
+// hours, describes a process that does not exist. This one says what actually
+// happened and what to do next.
+export const getBusinessWelcomeTemplate = (
+  subject: string,
+  businessName: string,
+  ownerName?: string,
+) => {
+  const greeting = ownerName ? esc(ownerName) : esc(businessName);
+  return emailShell(
+    subject,
+    `        <p>Hello <strong>${greeting}</strong>,</p>
+        <p>
+          Welcome to <strong>Desi Tracker</strong>. <strong>${esc(businessName)}</strong> is
+          registered and your listing is live — customers can find you in the app from now.
+        </p>
+        <div class="card">
+          A good next step is to add your opening hours, a photo and your menu or
+          services. Listings with those filled in get found far more often.
+        </div>
+        <p>
+          You can change anything at any time from your dashboard in the app.
+        </p>
+        <p>Best regards,<br/>Desi Tracker Team</p>`,
+  );
 };
