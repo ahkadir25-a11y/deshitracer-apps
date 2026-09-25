@@ -50,6 +50,26 @@ const catalogPriceMap = async (ids: any[], business_id: any) => {
   return map;
 };
 
+// A discount is a percentage of what is on the bill, so the amount is always
+// worked out here from `percent` and the current subtotal. It used to be a
+// fixed amount copied from the client at create time: /orders/create is
+// public, so anyone could send applied:true with discountAmount = subtotal and
+// pay nothing, and adding or voiding a dish later left the old amount in place.
+export const applyDiscount = (md: any, subtotal: number) => {
+  if (!md) return;
+  const sub = Math.max(0, Number(subtotal) || 0);
+  const pct = Math.min(100, Math.max(0, Number(md.percent) || 0));
+  if (md.applied && pct > 0) {
+    md.percent = pct;
+    md.discountAmount = Math.round(sub * pct) / 100;
+  } else {
+    md.applied = false;
+    md.percent = 0;
+    md.discountAmount = 0;
+  }
+  md.payable = Math.max(0, sub - md.discountAmount);
+};
+
 export const createOrder = async (payload: any) => {
   // If this is a dine-in order and tableNo is provided, link to the table.
   // Auto-create the table record if it doesn't exist yet — staff often type a
@@ -140,9 +160,7 @@ export const createOrder = async (payload: any) => {
         0,
       );
       payload.subtotal = subtotal;
-      if (payload.membershipDiscount && !payload.membershipDiscount.applied) {
-        payload.membershipDiscount.payable = subtotal;
-      }
+      applyDiscount(payload.membershipDiscount, subtotal);
     } catch (e: any) {
       // Refuse the order rather than bill whatever the client asked to pay.
       // This used to fall back to the submitted prices so an order was never
@@ -323,11 +341,7 @@ export const addItemsToOrder = async (id: string, business_id: string, newItems:
   order.totalQty += itemsToAdd.reduce((sum, item) => sum + (item.quantity || 1), 0);
   order.subtotal += itemsToAdd.reduce((sum, item) => sum + (item.price * (item.quantity || 1)), 0);
   
-  if (order.membershipDiscount?.applied) {
-     order.membershipDiscount.payable = order.subtotal - (order.membershipDiscount.discountAmount || 0);
-  } else if (order.membershipDiscount) {
-     order.membershipDiscount.payable = order.subtotal;
-  }
+  applyDiscount(order.membershipDiscount, order.subtotal);
 
   await order.save();
 
@@ -502,15 +516,11 @@ export const updateOrder = async (id: string, business_id: string, updates: any)
       (s: number, it: any) => s + Number(it.price || 0) * (Number(it.quantity) || 1),
       0,
     );
-    if (order.membershipDiscount?.applied) {
-      order.membershipDiscount.payable = Math.max(
-        0,
-        order.subtotal - (Number(order.membershipDiscount.discountAmount) || 0),
-      );
-    } else if (order.membershipDiscount) {
-      order.membershipDiscount.payable = order.subtotal;
-    }
   }
+
+  // Outside the items branch: a staff edit can change the percent (or the
+  // subtotal) without touching items, and the amount must follow either way.
+  applyDiscount(order.membershipDiscount, order.subtotal);
 
   await order.save();
 
@@ -713,14 +723,7 @@ export const decideItemVoid = async (
       // Don't physically remove — keep audit. Subtract from rollups.
       order.totalQty = Math.max(0, (Number(order.totalQty) || 0) - removeQty);
       order.subtotal = Math.max(0, (Number(order.subtotal) || 0) - removePrice);
-      if (order.membershipDiscount?.applied) {
-        order.membershipDiscount.payable = Math.max(
-          0,
-          order.subtotal - (Number(order.membershipDiscount.discountAmount) || 0)
-        );
-      } else if (order.membershipDiscount) {
-        order.membershipDiscount.payable = order.subtotal;
-      }
+      applyDiscount(order.membershipDiscount, order.subtotal);
     }
   }
 

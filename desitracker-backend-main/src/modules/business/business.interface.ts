@@ -148,4 +148,5 @@ export type TBusiness = {
   serviceSettings?: TServiceSettings;
   notificationSettings?: TNotificationSettings;
   managerPin?: string; // hashed; used for risky-action approval at POS
+  memberDiscountPercent?: number; // 0-100, what members get off here
 };

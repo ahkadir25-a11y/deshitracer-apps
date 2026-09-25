@@ -1,5 +1,49 @@
 import { Request, Response } from "express";
 import * as orderService from "./order.service";
+import { Types } from "mongoose";
+import { resolvePrincipal, isBusinessMember } from "../../utils/lib/businessAccess";
+
+// Who is placing this order decides what discount it may carry. The client's
+// numbers are never used for the amount — the service works that out from the
+// percent (applyDiscount).
+//   staff of this business  -> the percent they chose (member or manual reason)
+//   signed-in member        -> this business's own memberDiscountPercent, and
+//                              the order is linked to THEM, not to whatever
+//                              member_id the body names
+//   anyone else (guest)     -> no discount, no member link
+const resolveOrderDiscount = async (req: Request, business_id: string) => {
+  const body = req.body || {};
+  const principal = await resolvePrincipal(req);
+  if (principal && principal.role !== "member" && await isBusinessMember(principal, business_id)) {
+    const md = body.membershipDiscount || {};
+    const percent = md.applied ? Number(md.percent) || 0 : 0;
+    return {
+      percent,
+      offer: md.offer ?? null,
+      member: body.member_id || null,
+      memberSerial: body.memberSerial || null,
+    };
+  }
+  if (principal?.role === "member") {
+    // Loaded lazily, the same way the service loads Business, to keep this
+    // module out of any model import cycle.
+    const { Business } = await import("../business/business.model");
+    const { Member } = await import("../members/member.model");
+    const [biz, me] = await Promise.all([
+      Business.findById(business_id).select("memberDiscountPercent").lean(),
+      Member.findById(principal.id).select("serialNumber active").lean(),
+    ]);
+    if (me && (me as any).active !== false) {
+      return {
+        percent: Number((biz as any)?.memberDiscountPercent) || 0,
+        offer: null,
+        member: String((me as any)._id),
+        memberSerial: (me as any).serialNumber || null,
+      };
+    }
+  }
+  return { percent: 0, offer: null, member: null, memberSerial: null };
+};
 
 const createOrder = async (req: Request, res: Response) => {
   try {
@@ -17,9 +61,6 @@ const createOrder = async (req: Request, res: Response) => {
       notes,
       items,
       totals,
-      membershipDiscount,
-      memberSerial,
-      member_id,
       currency,
       status,
       customerName,
@@ -67,6 +108,12 @@ const createOrder = async (req: Request, res: Response) => {
       return;
     }
 
+    if (!Types.ObjectId.isValid(String(business_id))) {
+      res.status(400).json({ error: "business_id is invalid." });
+      return;
+    }
+    const discount = await resolveOrderDiscount(req, String(business_id));
+
     const created = await orderService.createOrder({
       business_id,
       user_id,
@@ -81,14 +128,16 @@ const createOrder = async (req: Request, res: Response) => {
       items,
       totalQty: Number(totals?.totalQty || 0),
       subtotal: Number(totals?.subtotal || 0),
-      memberSerial: memberSerial || null,
-      member: member_id || null,
-      membershipDiscount: membershipDiscount || {
-        applied: false,
-        percent: 0,
+      memberSerial: discount.memberSerial,
+      member: discount.member,
+      // Amount and payable are filled in by the service from the server-side
+      // subtotal; only the percent decided above goes in.
+      membershipDiscount: {
+        applied: discount.percent > 0,
+        percent: discount.percent,
         discountAmount: 0,
-        payable: Number(totals?.subtotal || 0),
-        offer: null,
+        payable: 0,
+        offer: discount.offer,
       },
       currency,
       status: status || "pending",

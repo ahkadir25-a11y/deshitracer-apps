@@ -184,6 +184,10 @@ const BusinessSchema = new Schema<TBusiness>(
     // (large discounts, void approvals, table transfers). Optional —
     // if unset, the business hasn't enabled PIN-based approvals.
     managerPin: { type: String, select: false, default: undefined },
+    // Percent off a member gets at this business. The owner sets it; unset
+    // means members get nothing here. The order service reads this — the
+    // app's number is never trusted, because /orders/create is public.
+    memberDiscountPercent: { type: Number, default: 0, min: 0, max: 100 },
   },
   { timestamps: true },
 );

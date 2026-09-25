@@ -103,9 +103,19 @@ const pickBusinessId = (req: Request): string | undefined => {
   const b: any = req.body || {};
   const q: any = req.query || {};
   const p: any = req.params || {};
-  return (
-    b.business_id || q.business_id || p.businessId || b.business || q.business || p.business
-  );
+  // Every spelling a client uses — inventory's stock adjust sends `businessId`
+  // in the body, which this used to miss entirely.
+  const found = [
+    b.business_id, q.business_id, p.businessId, b.businessId, q.businessId,
+    b.business, q.business, p.business,
+  ].filter((v) => v !== undefined && v !== null && v !== '').map(String);
+  // Only the first spelling was checked, but a handler may save a different
+  // one (dine-in stores `business`). Sending your own id as business_id and a
+  // victim's as business passed the check and wrote into the victim's data.
+  if (new Set(found).size > 1) {
+    throw new AppError(400, 'Conflicting business ids in request');
+  }
+  return found[0];
 };
 
 /**

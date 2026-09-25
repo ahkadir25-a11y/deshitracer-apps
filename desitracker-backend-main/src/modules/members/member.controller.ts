@@ -56,7 +56,10 @@ export const meController: RequestHandler = async (req, res): Promise<void> => {
   const m = await memberService.getMemberById((req as MemberAuthRequest).member!.id);
   if (!m) { res.status(404).json({ message: 'Not found' }); return; }
   res.json({
-    id: m._id, name: m.name, phone: m.phone, city: m.city,
+    // `_id` as well as `id`: the app reads `_id` everywhere else, and checkout
+    // read it here too — it was always undefined, so a member's own orders
+    // were saved with no member on them and never showed in their history.
+    id: m._id, _id: m._id, name: m.name, phone: m.phone, city: m.city,
     profileImageUrl: m.profileImageUrl,
     coverPhotoUrl: m.coverPhotoUrl,
     serialNumber: m?.serialNumber, qrCodeUrl: m.qrCodeUrl,

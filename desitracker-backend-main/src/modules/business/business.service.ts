@@ -620,10 +620,20 @@ const getAllBusinessListings = async (query: Record<string, unknown>) => {
   };
 };
 
-const setManagerPin = async (businessId: string, pin: string) => {
+const setManagerPin = async (businessId: string, pin: string, decodedUser: JwtPayload) => {
   const raw = (pin || '').trim();
   if (!/^\d{4,8}$/.test(raw)) {
     throw new AppError(400, 'PIN must be 4-8 digits');
+  }
+  // The PIN is the key to discounts, voids and table moves. Only this
+  // business's own owner (or an admin) may change it — the route used to
+  // accept any business owner and any businessId, so one owner could lock
+  // another out of their own till, or set a PIN they then knew.
+  const biz = await Business.findById(businessId).select('owner').lean();
+  if (!biz) throw new AppError(404, 'Business not found');
+  const isAdmin = decodedUser?.role === USER_ROLE.ADMIN;
+  if (!isAdmin && String((biz as any).owner) !== String(decodedUser?.id)) {
+    throw new AppError(403, 'Only the owner of this business can change its manager PIN.');
   }
   const hashed = await bcrypt.hash(raw, 10);
   const updated = await Business.findByIdAndUpdate(

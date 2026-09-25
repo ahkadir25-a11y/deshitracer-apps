@@ -95,7 +95,7 @@ const getAllBusinessListings = handleAsyncRequest(
 
 const setManagerPin = handleAsyncRequest(async (req: Request, res: Response) => {
   const { businessId, pin } = req.body || {};
-  const result = await BusinessServices.setManagerPin(businessId, pin);
+  const result = await BusinessServices.setManagerPin(businessId, pin, req.user as any);
   sendResponse(res, {
     statusCode: httpStatus.OK,
     success: true,
