@@ -225,6 +225,15 @@ export const RotaEmployeeService = {
         { new: true, runValidators: false },
       );
     } else {
+      // A brand-new staff login may not take an email a member already uses —
+      // one email, one account. (Existing Users are linked above unchanged.)
+      const { emailBelongsToMember } = await import('../../../utils/lib/memberEmail');
+      if (await emailBelongsToMember(email)) {
+        throw new AppError(
+          409,
+          'This email is already used by a Deshi Tracker member account. Ask your employer to invite a different email.',
+        );
+      }
       const fullName = `${employee.firstName} ${employee.lastName || ''}`.trim();
       // Phone is required + isMobilePhone-validated on User. Prefer the phone
       // submitted in the accept form, fall back to whatever the owner saved on

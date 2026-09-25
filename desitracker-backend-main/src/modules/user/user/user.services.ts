@@ -7,6 +7,7 @@ import QueryBuilder from '../../../utils/queryBuilder';
 import { TChangePassword, TUser } from './user.interface';
 import { User } from './user.model';
 import { cleanupUserRelations } from '../../../utils/lib/cascadeCleanup';
+import { emailBelongsToMember, MEMBER_EMAIL_TAKEN } from '../../../utils/lib/memberEmail';
 
 // Register a User
 const registerUser = async (payload: TUser, image: any) => {
@@ -56,6 +57,11 @@ const registerUser = async (payload: TUser, image: any) => {
         409,
         `This email is already registered as a ${roleLabel} account. Please sign in instead, or use a different email address.`,
       );
+    }
+    // The other half of the rule: an email a member already uses can't become
+    // an owner account too (member signup already refuses the reverse).
+    if (await emailBelongsToMember(userData.email)) {
+      throw new AppError(409, MEMBER_EMAIL_TAKEN);
     }
   }
   if (image) {
@@ -121,6 +127,11 @@ const updateUser = async (userId: string, payload: Partial<TUser> & { currentPas
       const bcrypt = await import('bcrypt');
       const ok = await bcrypt.compare(current, (existing as any).password || '');
       if (!ok) throw new AppError(401, 'Current password is incorrect.');
+      // Moving to an address a member already uses would make the same clash
+      // that registration now refuses.
+      if (await emailBelongsToMember(payload.email)) {
+        throw new AppError(409, MEMBER_EMAIL_TAKEN);
+      }
     }
 
     // Strip the proof so we never persist it on the user doc.
